@@ -10,7 +10,7 @@ final class VideoCompressor: ObservableObject {
     func compressVideo(inputURL: URL, musicURL: URL? = nil) async throws -> URL {
         await MainActor.run {
             self.isProcessing = true
-            self.statusMessage = "Membaca orientasi dan frame 60 FPS..."
+            self.statusMessage = "Menganalisis durasi & rotasi..."
         }
         
         let videoAsset = AVURLAsset(url: inputURL)
@@ -18,16 +18,17 @@ final class VideoCompressor: ObservableObject {
             throw NSError(domain: "Compressor", code: -1, userInfo: [NSLocalizedDescriptionKey: "Track video tidak ditemukan."])
         }
         
+        // KUNCI UTAMA DURASI: Ambil durasi eksak video asli
+        let videoDuration = try await videoAsset.load(.duration)
         let transform = try await videoTrack.load(.preferredTransform)
         let orientation = getOrientation(from: transform)
         
-        // Cek apakah video portrait atau landscape berdasarkan EXIF orientation
         let isPortrait = (orientation == .right || orientation == .left || orientation == .rightMirrored || orientation == .leftMirrored)
         let targetWidth: Int = isPortrait ? 1080 : 1920
         let targetHeight: Int = isPortrait ? 1920 : 1080
         
         let outputURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("WA_HD_STATUS_\(UUID().uuidString).mp4")
+            .appendingPathComponent("WA_60FPS_\(UUID().uuidString).mp4")
         try? FileManager.default.removeItem(at: outputURL)
         
         // 1. SETUP READER VIDEO
@@ -41,7 +42,7 @@ final class VideoCompressor: ObservableObject {
             reader.add(videoOutput)
         }
         
-        // 2. SETUP AUDIO (Gunakan Musik Tambahan Jika Ada, Atau Suara Asli)
+        // 2. SETUP AUDIO (Potong durasi audio agar SAMA DENGAN video)
         var audioAsset = videoAsset
         if let customMusic = musicURL {
             audioAsset = AVURLAsset(url: customMusic)
@@ -52,6 +53,9 @@ final class VideoCompressor: ObservableObject {
         
         if let audioTrack = try? await audioAsset.loadTracks(withMediaType: .audio).first {
             let aReader = try AVAssetReader(asset: audioAsset)
+            // KUNCI DURASI: Batasi pembacaan audio hanya sampai durasi video!
+            aReader.timeRange = CMTimeRange(start: .zero, duration: videoDuration)
+            
             let aOut = AVAssetReaderTrackOutput(
                 track: audioTrack,
                 outputSettings: [AVFormatIDKey: kAudioFormatLinearPCM]
@@ -64,7 +68,7 @@ final class VideoCompressor: ObservableObject {
             }
         }
         
-        // 3. SETUP WRITER ANTI-BEGAL WHATSAPP
+        // 3. SETUP WRITER ANTI-BEGAL
         let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
         writer.shouldOptimizeForNetworkUse = true
         
@@ -73,9 +77,9 @@ final class VideoCompressor: ObservableObject {
             AVVideoWidthKey: targetWidth,
             AVVideoHeightKey: targetHeight,
             AVVideoCompressionPropertiesKey: [
-                AVVideoAverageBitRateKey: 3_000_000, // 3.0 Mbps: Ambang batas aman WhatsApp
+                AVVideoAverageBitRateKey: 3_000_000, // 3.0 Mbps: Batas aman WA
                 AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
-                AVVideoMaxKeyFrameIntervalKey: 60,   // Keyframe tepat tiap 1 detik
+                AVVideoMaxKeyFrameIntervalKey: 60,
                 AVVideoExpectedSourceFrameRateKey: 60
             ]
         ]
@@ -117,14 +121,14 @@ final class VideoCompressor: ObservableObject {
             }
         }
         
-        // 4. MULAI PROSES ENCODING
+        // 4. MULAI RENDERING
         reader.startReading()
         audioReader?.startReading()
         writer.startWriting()
         writer.startSession(atSourceTime: .zero)
         
         await MainActor.run {
-            self.statusMessage = musicURL != nil ? "Memadukan musik & merender 60 FPS..." : "Merender 1080p 60 FPS murni..."
+            self.statusMessage = "Merender 1080p 60 FPS..."
         }
         
         let ciContext = CIContext(options: [.useSoftwareRenderer: false])
@@ -162,19 +166,18 @@ final class VideoCompressor: ObservableObject {
                         return
                     }
                     
-                    // KUNCI ANTI-TERBALIK: Gunakan CGImagePropertyOrientation
+                    // KUNCI ANTI-TERBALIK: Gunakan Apple CoreImage Orientation
                     var ciImage = CIImage(cvPixelBuffer: imageBuffer).oriented(orientation)
                     
-                    // Penskalaan Aspect-Fit ke 1080x1920
                     let extent = ciImage.extent
-                    let scaleX = CGFloat(targetWidth) / extent.width
-                    let scaleY = CGFloat(targetHeight) / extent.height
-                    let scale = max(scaleX, scaleY)
+                    let scale = max(CGFloat(targetWidth) / extent.width, CGFloat(targetHeight) / extent.height)
                     
                     ciImage = ciImage.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+                    let offsetX = (CGFloat(targetWidth) - ciImage.extent.width) / 2.0
+                    let offsetY = (CGFloat(targetHeight) - ciImage.extent.height) / 2.0
                     ciImage = ciImage.transformed(by: CGAffineTransform(
-                        translationX: -ciImage.extent.origin.x + (CGFloat(targetWidth) - ciImage.extent.width) / 2.0,
-                        y: -ciImage.extent.origin.y + (CGFloat(targetHeight) - ciImage.extent.height) / 2.0
+                        translationX: offsetX - ciImage.extent.origin.x,
+                        y: offsetY - ciImage.extent.origin.y
                     ))
                     
                     var pixelBufferOut: CVPixelBuffer?
@@ -205,7 +208,7 @@ final class VideoCompressor: ObservableObject {
             }
         }
         
-        // AUDIO THREAD
+        // AUDIO THREAD (Dibatasi ketat hingga durasi video)
         var isAudioDone = false
         var pendingAudioBuffer: CMSampleBuffer? = nil
         
@@ -220,6 +223,17 @@ final class VideoCompressor: ObservableObject {
                     }
                     
                     guard let buffer = pendingAudioBuffer else {
+                        if !isAudioDone {
+                            isAudioDone = true
+                            aIn.markAsFinished()
+                            group.leave()
+                        }
+                        break
+                    }
+                    
+                    let pts = CMSampleBufferGetPresentationTimeStamp(buffer)
+                    // Hentikan audio jika sudah melewati durasi video
+                    if pts >= videoDuration {
                         if !isAudioDone {
                             isAudioDone = true
                             aIn.markAsFinished()
@@ -243,6 +257,7 @@ final class VideoCompressor: ObservableObject {
             }
         }
         
+        writer.endSession(atSourceTime: videoDuration)
         await writer.finishWriting()
         
         await MainActor.run {
@@ -256,7 +271,6 @@ final class VideoCompressor: ObservableObject {
         }
     }
     
-    // Mapping transform rotasi kamera iPhone ke EXIF orientation
     private func getOrientation(from transform: CGAffineTransform) -> CGImagePropertyOrientation {
         if transform.a == 0 && transform.b == 1.0 && transform.c == -1.0 && transform.d == 0 {
             return .right
