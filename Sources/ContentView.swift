@@ -1,5 +1,5 @@
 import SwiftUI
-import PhotosUI
+import Photos
 import UniformTypeIdentifiers
 
 struct ContentView: View {
@@ -12,119 +12,137 @@ struct ContentView: View {
     @State private var processedVideoURL: URL? = nil
     @State private var showShareSheet = false
     @State private var videoInfoText: String? = nil
+    @State private var saveMessage: String? = nil
     
     var body: some View {
         ZStack {
-            Color(UIColor.systemBackground).ignoresSafeArea()
+            Color(red: 0.05, green: 0.06, blue: 0.08).ignoresSafeArea()
             
-            VStack(spacing: 20) {
+            VStack(spacing: 16) {
                 // Header Ringkas
-                VStack(spacing: 4) {
+                VStack(spacing: 3) {
                     Text("STATUS PURIFIER")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .tracking(2)
-                    Text("ANTI-BEGAL 1080P 60 FPS")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                        .tracking(2.5)
+                        .foregroundColor(.white)
+                    Text("1080P 60 FPS ANTI-BEGAL")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundColor(Color(red: 0.83, green: 0.68, blue: 0.21))
                 }
-                .padding(.top, 16)
+                .padding(.top, 10)
                 
-                // Card Pratinjau & Status
+                // Box Status Utama
                 VStack(spacing: 12) {
                     if compressor.isProcessing {
                         ProgressView()
-                            .scaleEffect(1.2)
+                            .progressViewStyle(CircularProgressViewStyle(tint: Color(red: 0.83, green: 0.68, blue: 0.21)))
+                            .scaleEffect(1.3)
                         Text(compressor.statusMessage)
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(.gray)
                     } else if processedVideoURL != nil {
-                        Image(systemName: "checkmark.circle.fill")
+                        Image(systemName: "checkmark.seal.fill")
                             .font(.system(size: 40))
-                            .foregroundColor(.green)
-                        Text("VIDEO SIAP UNGGAH")
+                            .foregroundColor(Color(red: 0.83, green: 0.68, blue: 0.21))
+                        Text("PROSES SELESAI")
                             .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        Text("1080x1920 • 60 FPS • 3.0 Mbps")
+                            .foregroundColor(.white)
+                        Text("1080x1920 • 60 FPS Murni")
                             .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.gray)
                     } else {
                         Image(systemName: "video.badge.waveform")
-                            .font(.system(size: 36))
-                            .foregroundColor(.secondary)
-                        Text(videoInfoText ?? "Pilih Master Video 4K")
+                            .font(.system(size: 40))
+                            .foregroundColor(.gray)
+                        Text(videoInfoText ?? "PILIH MASTER VIDEO 4K")
                             .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.gray)
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: 150)
-                .background(Color(UIColor.secondarySystemBackground))
-                .cornerRadius(12)
+                .frame(height: 160)
+                .background(Color(red: 0.09, green: 0.10, blue: 0.12))
+                .cornerRadius(14)
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.06), lineWidth: 1))
                 .padding(.horizontal, 20)
                 
-                // Panel Musik Tambahan (Opsional)
-                VStack(spacing: 8) {
-                    HStack {
-                        Image(systemName: "music.note")
-                            .foregroundColor(.secondary)
-                        if let music = selectedMusicURL {
-                            Text(music.lastPathComponent)
-                                .font(.system(size: 11, design: .monospaced))
-                                .lineLimit(1)
-                            Spacer()
-                            Button(action: { selectedMusicURL = nil }) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(.secondary)
-                            }
-                        } else {
-                            Text("Musik Latar (Opsional)")
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundColor(.secondary)
-                            Spacer()
-                            Button("Pilih") {
-                                showMusicPicker = true
-                            }
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                // Pilihan Musik Tambahan
+                HStack {
+                    Image(systemName: "music.note")
+                        .foregroundColor(selectedMusicURL != nil ? Color(red: 0.83, green: 0.68, blue: 0.21) : .gray)
+                    if let music = selectedMusicURL {
+                        Text(music.lastPathComponent)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                        Spacer()
+                        Button(action: { selectedMusicURL = nil }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.gray)
                         }
+                    } else {
+                        Text("Ganti Musik Latar (Opsional)")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(.gray)
+                        Spacer()
+                        Button("Pilih") {
+                            showMusicPicker = true
+                        }
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(Color(red: 0.83, green: 0.68, blue: 0.21))
                     }
-                    .padding(.horizontal, 14)
-                    .frame(height: 44)
-                    .background(Color(UIColor.secondarySystemBackground))
-                    .cornerRadius(10)
                 }
+                .padding(.horizontal, 14)
+                .frame(height: 44)
+                .background(Color(red: 0.09, green: 0.10, blue: 0.12))
+                .cornerRadius(10)
+                .padding(.horizontal, 20)
+                
+                // Panduan Trik Status 60 FPS
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("💡 CARA AGAR TIDAK DI-COMPRESS WA:")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundColor(Color(red: 0.83, green: 0.68, blue: 0.21))
+                    Text("1. Simpan ke Foto.\n2. Buka WA, kirim ke chat sendiri (You) dengan tombol [HD].\n3. Teruskan (Forward) video tersebut ke 'Status Saya'.")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.gray)
+                        .lineSpacing(2)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(Color.white.opacity(0.03))
+                .cornerRadius(10)
                 .padding(.horizontal, 20)
                 
                 Spacer()
                 
-                // Tombol Aksi
+                // Tombol Aksi Bawah
                 VStack(spacing: 10) {
-                    if processedVideoURL != nil {
+                    if let outputURL = processedVideoURL {
+                        // Tombol Simpan Langsung ke Galeri
+                        Button(action: { saveToPhotoLibrary(url: outputURL) }) {
+                            HStack {
+                                Image(systemName: "square.and.arrow.down.fill")
+                                Text(saveMessage ?? "SIMPAN LANGSUNG KE GALERI")
+                            }
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundColor(.black)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 48)
+                            .background(Color(red: 0.83, green: 0.68, blue: 0.21))
+                            .cornerRadius(10)
+                        }
+                        
                         Button(action: { showShareSheet = true }) {
                             HStack {
                                 Image(systemName: "paperplane.fill")
-                                Text("BAGIKAN KE WHATSAPP")
+                                Text("BAGIKAN VIA SHARE SHEET")
                             }
-                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
-                            .frame(height: 46)
-                            .background(Color.green)
-                            .cornerRadius(10)
-                        }
-                    }
-                    
-                    if selectedVideoURL != nil && !compressor.isProcessing {
-                        Button(action: { startProcessing() }) {
-                            HStack {
-                                Image(systemName: "bolt.fill")
-                                Text("PROSES ULANG SEKARANG")
-                            }
-                            .font(.system(size: 12, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 46)
-                            .background(Color.blue)
+                            .frame(height: 48)
+                            .background(Color(red: 0.13, green: 0.15, blue: 0.18))
                             .cornerRadius(10)
                         }
                     }
@@ -132,24 +150,25 @@ struct ContentView: View {
                     Button(action: { showVideoPicker = true }) {
                         HStack {
                             Image(systemName: "photo.on.rectangle.angled")
-                            Text(selectedVideoURL == nil ? "IMPORT VIDEO 4K" : "GANTI VIDEO")
+                            Text(selectedVideoURL == nil ? "IMPORT VIDEO 4K" : "GANTI VIDEO MASTER")
                         }
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundColor(.primary)
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 46)
-                        .background(Color(UIColor.secondarySystemBackground))
+                        .frame(height: 48)
+                        .background(Color(red: 0.18, green: 0.20, blue: 0.24))
                         .cornerRadius(10)
                     }
                     .disabled(compressor.isProcessing)
                 }
                 .padding(.horizontal, 20)
-                .padding(.bottom, 20)
+                .padding(.bottom, 24)
             }
         }
         .sheet(isPresented: $showVideoPicker) {
             NativeVideoPicker { url in
                 selectedVideoURL = url
+                saveMessage = nil
                 Task {
                     let asset = AVURLAsset(url: url)
                     if let track = try? await asset.loadTracks(withMediaType: .video).first,
@@ -166,6 +185,7 @@ struct ContentView: View {
         .sheet(isPresented: $showMusicPicker) {
             AudioPicker { url in
                 selectedMusicURL = url
+                saveMessage = nil
                 if selectedVideoURL != nil {
                     startProcessing()
                 }
@@ -188,11 +208,24 @@ struct ContentView: View {
                 )
                 await MainActor.run {
                     self.processedVideoURL = result
-                    self.showShareSheet = true
                 }
             } catch {
                 await MainActor.run {
                     self.compressor.statusMessage = "Gagal: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+    
+    private func saveToPhotoLibrary(url: URL) {
+        PHPhotoLibrary.shared().performChanges({
+            PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
+        }) { success, error in
+            DispatchQueue.main.async {
+                if success {
+                    self.saveMessage = "BERHASIL DISIMPAN KE GALERI! ✓"
+                } else {
+                    self.saveMessage = "GAGAL MENYIMPAN: \(error?.localizedDescription ?? "")"
                 }
             }
         }
