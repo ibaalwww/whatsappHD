@@ -7,39 +7,31 @@ final class VideoCompressor: ObservableObject {
     @Published var isProcessing = false
     @Published var statusMessage = "Siap memproses"
     
-    func compressVideo(inputURL: URL, fitWhatsAppScreen: Bool = true) async throws -> URL {
+    func compressVideo(inputURL: URL, musicURL: URL? = nil) async throws -> URL {
         await MainActor.run {
             self.isProcessing = true
-            self.statusMessage = "Menganalisis frame 60 FPS..."
+            self.statusMessage = "Membaca orientasi dan frame 60 FPS..."
         }
         
-        let asset = AVURLAsset(url: inputURL)
-        guard let videoTrack = try await asset.loadTracks(withMediaType: .video).first else {
+        let videoAsset = AVURLAsset(url: inputURL)
+        guard let videoTrack = try await videoAsset.loadTracks(withMediaType: .video).first else {
             throw NSError(domain: "Compressor", code: -1, userInfo: [NSLocalizedDescriptionKey: "Track video tidak ditemukan."])
         }
         
-        let naturalSize = try await videoTrack.load(.naturalSize)
         let transform = try await videoTrack.load(.preferredTransform)
+        let orientation = getOrientation(from: transform)
         
-        let isPortrait = (transform.a == 0 && abs(transform.b) == 1.0) || (transform.d == 0 && abs(transform.c) == 1.0)
-        
-        // Atur resolusi kanvas: 1080x2340 (Anti-Zoom WA iPhone) atau 1080x1920 (Original 9:16)
-        let targetWidth: Int
-        let targetHeight: Int
-        if isPortrait {
-            targetWidth = 1080
-            targetHeight = fitWhatsAppScreen ? 2340 : 1920
-        } else {
-            targetWidth = 1920
-            targetHeight = 1080
-        }
+        // Cek apakah video portrait atau landscape berdasarkan EXIF orientation
+        let isPortrait = (orientation == .right || orientation == .left || orientation == .rightMirrored || orientation == .leftMirrored)
+        let targetWidth: Int = isPortrait ? 1080 : 1920
+        let targetHeight: Int = isPortrait ? 1920 : 1080
         
         let outputURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("WA_HD_60FPS_\(UUID().uuidString).mp4")
+            .appendingPathComponent("WA_HD_STATUS_\(UUID().uuidString).mp4")
         try? FileManager.default.removeItem(at: outputURL)
         
-        // 1. SETUP READER
-        let reader = try AVAssetReader(asset: asset)
+        // 1. SETUP READER VIDEO
+        let reader = try AVAssetReader(asset: videoAsset)
         let videoOutput = AVAssetReaderTrackOutput(
             track: videoTrack,
             outputSettings: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
@@ -49,20 +41,30 @@ final class VideoCompressor: ObservableObject {
             reader.add(videoOutput)
         }
         
+        // 2. SETUP AUDIO (Gunakan Musik Tambahan Jika Ada, Atau Suara Asli)
+        var audioAsset = videoAsset
+        if let customMusic = musicURL {
+            audioAsset = AVURLAsset(url: customMusic)
+        }
+        
         var audioOutput: AVAssetReaderTrackOutput? = nil
-        if let audioTrack = try? await asset.loadTracks(withMediaType: .audio).first {
+        var audioReader: AVAssetReader? = nil
+        
+        if let audioTrack = try? await audioAsset.loadTracks(withMediaType: .audio).first {
+            let aReader = try AVAssetReader(asset: audioAsset)
             let aOut = AVAssetReaderTrackOutput(
                 track: audioTrack,
                 outputSettings: [AVFormatIDKey: kAudioFormatLinearPCM]
             )
             aOut.alwaysCopiesSampleData = false
-            if reader.canAdd(aOut) {
-                reader.add(aOut)
+            if aReader.canAdd(aOut) {
+                aReader.add(aOut)
                 audioOutput = aOut
+                audioReader = aReader
             }
         }
         
-        // 2. SETUP WRITER
+        // 3. SETUP WRITER ANTI-BEGAL WHATSAPP
         let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
         writer.shouldOptimizeForNetworkUse = true
         
@@ -71,9 +73,9 @@ final class VideoCompressor: ObservableObject {
             AVVideoWidthKey: targetWidth,
             AVVideoHeightKey: targetHeight,
             AVVideoCompressionPropertiesKey: [
-                AVVideoAverageBitRateKey: 4_500_000,
+                AVVideoAverageBitRateKey: 3_000_000, // 3.0 Mbps: Ambang batas aman WhatsApp
                 AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
-                AVVideoMaxKeyFrameIntervalKey: 60,
+                AVVideoMaxKeyFrameIntervalKey: 60,   // Keyframe tepat tiap 1 detik
                 AVVideoExpectedSourceFrameRateKey: 60
             ]
         ]
@@ -115,13 +117,14 @@ final class VideoCompressor: ObservableObject {
             }
         }
         
-        // 3. PROSES RENDERING METAL DENGAN SKALA PRESISI
+        // 4. MULAI PROSES ENCODING
         reader.startReading()
+        audioReader?.startReading()
         writer.startWriting()
         writer.startSession(atSourceTime: .zero)
         
         await MainActor.run {
-            self.statusMessage = "Merender 1080p 60 FPS Anti-Crop..."
+            self.statusMessage = musicURL != nil ? "Memadukan musik & merender 60 FPS..." : "Merender 1080p 60 FPS murni..."
         }
         
         let ciContext = CIContext(options: [.useSoftwareRenderer: false])
@@ -159,23 +162,20 @@ final class VideoCompressor: ObservableObject {
                         return
                     }
                     
-                    var ciImage = CIImage(cvPixelBuffer: imageBuffer)
-                    ciImage = ciImage.transformed(by: transform)
-                    ciImage = ciImage.transformed(by: CGAffineTransform(
-                        translationX: -ciImage.extent.origin.x,
-                        y: -ciImage.extent.origin.y
-                    ))
+                    // KUNCI ANTI-TERBALIK: Gunakan CGImagePropertyOrientation
+                    var ciImage = CIImage(cvPixelBuffer: imageBuffer).oriented(orientation)
                     
-                    // Skala video agar muat pas di kanvas tanpa melar (Aspect Fit)
-                    let scale = min(CGFloat(targetWidth) / ciImage.extent.width, CGFloat(targetHeight) / ciImage.extent.height)
-                    let scaledWidth = ciImage.extent.width * scale
-                    let scaledHeight = ciImage.extent.height * scale
-                    
-                    let offsetX = (CGFloat(targetWidth) - scaledWidth) / 2.0
-                    let offsetY = (CGFloat(targetHeight) - scaledHeight) / 2.0
+                    // Penskalaan Aspect-Fit ke 1080x1920
+                    let extent = ciImage.extent
+                    let scaleX = CGFloat(targetWidth) / extent.width
+                    let scaleY = CGFloat(targetHeight) / extent.height
+                    let scale = max(scaleX, scaleY)
                     
                     ciImage = ciImage.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-                    ciImage = ciImage.transformed(by: CGAffineTransform(translationX: offsetX, y: offsetY))
+                    ciImage = ciImage.transformed(by: CGAffineTransform(
+                        translationX: -ciImage.extent.origin.x + (CGFloat(targetWidth) - ciImage.extent.width) / 2.0,
+                        y: -ciImage.extent.origin.y + (CGFloat(targetHeight) - ciImage.extent.height) / 2.0
+                    ))
                     
                     var pixelBufferOut: CVPixelBuffer?
                     if let pool = adaptor.pixelBufferPool {
@@ -205,6 +205,7 @@ final class VideoCompressor: ObservableObject {
             }
         }
         
+        // AUDIO THREAD
         var isAudioDone = false
         var pendingAudioBuffer: CMSampleBuffer? = nil
         
@@ -253,5 +254,19 @@ final class VideoCompressor: ObservableObject {
         } else {
             throw writer.error ?? NSError(domain: "Compressor", code: -2, userInfo: [NSLocalizedDescriptionKey: "Gagal encoding."])
         }
+    }
+    
+    // Mapping transform rotasi kamera iPhone ke EXIF orientation
+    private func getOrientation(from transform: CGAffineTransform) -> CGImagePropertyOrientation {
+        if transform.a == 0 && transform.b == 1.0 && transform.c == -1.0 && transform.d == 0 {
+            return .right
+        } else if transform.a == 0 && transform.b == -1.0 && transform.c == 1.0 && transform.d == 0 {
+            return .left
+        } else if transform.a == 1.0 && transform.b == 0 && transform.c == 0 && transform.d == 1.0 {
+            return .up
+        } else if transform.a == -1.0 && transform.b == 0 && transform.c == 0 && transform.d == -1.0 {
+            return .down
+        }
+        return .up
     }
 }
