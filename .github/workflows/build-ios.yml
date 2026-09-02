@@ -13,9 +13,14 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Select Xcode 15.4
+      - name: Select Latest Xcode 16
         run: |
-          sudo xcode-select -switch /Applications/Xcode_15.4.app
+          LATEST_XCODE=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -n 1)
+          if [ -z "$LATEST_XCODE" ]; then
+            LATEST_XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)
+          fi
+          echo "Using Xcode from: $LATEST_XCODE"
+          sudo xcode-select -switch "$LATEST_XCODE"
           xcodebuild -version
 
       - name: Install XcodeGen
