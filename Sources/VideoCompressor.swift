@@ -7,10 +7,10 @@ final class VideoCompressor: ObservableObject {
     @Published var isProcessing = false
     @Published var statusMessage = "Siap memproses"
     
-    func compressVideo(inputURL: URL) async throws -> URL {
+    func compressVideo(inputURL: URL, fitWhatsAppScreen: Bool = true) async throws -> URL {
         await MainActor.run {
             self.isProcessing = true
-            self.statusMessage = "Membaca 60 FPS murni via GPU..."
+            self.statusMessage = "Menganalisis frame 60 FPS..."
         }
         
         let asset = AVURLAsset(url: inputURL)
@@ -21,16 +21,24 @@ final class VideoCompressor: ObservableObject {
         let naturalSize = try await videoTrack.load(.naturalSize)
         let transform = try await videoTrack.load(.preferredTransform)
         
-        // Deteksi Portrait vs Landscape
         let isPortrait = (transform.a == 0 && abs(transform.b) == 1.0) || (transform.d == 0 && abs(transform.c) == 1.0)
-        let targetWidth: Int = isPortrait ? 1080 : 1920
-        let targetHeight: Int = isPortrait ? 1920 : 1080
+        
+        // Atur resolusi kanvas: 1080x2340 (Anti-Zoom WA iPhone) atau 1080x1920 (Original 9:16)
+        let targetWidth: Int
+        let targetHeight: Int
+        if isPortrait {
+            targetWidth = 1080
+            targetHeight = fitWhatsAppScreen ? 2340 : 1920
+        } else {
+            targetWidth = 1920
+            targetHeight = 1080
+        }
         
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("WA_HD_60FPS_\(UUID().uuidString).mp4")
         try? FileManager.default.removeItem(at: outputURL)
         
-        // 1. READER MURNI (Direct Track Output: Tidak akan pernah drop ke 30 FPS!)
+        // 1. SETUP READER
         let reader = try AVAssetReader(asset: asset)
         let videoOutput = AVAssetReaderTrackOutput(
             track: videoTrack,
@@ -41,7 +49,6 @@ final class VideoCompressor: ObservableObject {
             reader.add(videoOutput)
         }
         
-        // Audio Track
         var audioOutput: AVAssetReaderTrackOutput? = nil
         if let audioTrack = try? await asset.loadTracks(withMediaType: .audio).first {
             let aOut = AVAssetReaderTrackOutput(
@@ -55,7 +62,7 @@ final class VideoCompressor: ObservableObject {
             }
         }
         
-        // 2. WRITER ANTI-BEGAL WHATSAPP
+        // 2. SETUP WRITER
         let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
         writer.shouldOptimizeForNetworkUse = true
         
@@ -108,13 +115,13 @@ final class VideoCompressor: ObservableObject {
             }
         }
         
-        // 3. HARDWARE ACCELERATED RENDERING VIA METAL
+        // 3. PROSES RENDERING METAL DENGAN SKALA PRESISI
         reader.startReading()
         writer.startWriting()
         writer.startSession(atSourceTime: .zero)
         
         await MainActor.run {
-            self.statusMessage = "Merender 1080p 60 FPS..."
+            self.statusMessage = "Merender 1080p 60 FPS Anti-Crop..."
         }
         
         let ciContext = CIContext(options: [.useSoftwareRenderer: false])
@@ -123,11 +130,18 @@ final class VideoCompressor: ObservableObject {
         let group = DispatchGroup()
         
         var isVideoDone = false
+        var pendingVideoBuffer: CMSampleBuffer? = nil
+        
         group.enter()
         videoInput.requestMediaDataWhenReady(on: videoQueue) {
             if isVideoDone { return }
+            
             while videoInput.isReadyForMoreMediaData {
-                guard let sampleBuffer = videoOutput.copyNextSampleBuffer() else {
+                if pendingVideoBuffer == nil {
+                    pendingVideoBuffer = videoOutput.copyNextSampleBuffer()
+                }
+                
+                guard let sampleBuffer = pendingVideoBuffer else {
                     if !isVideoDone {
                         isVideoDone = true
                         videoInput.markAsFinished()
@@ -136,58 +150,86 @@ final class VideoCompressor: ObservableObject {
                     break
                 }
                 
-                guard let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { continue }
                 let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+                var appendSuccess = false
                 
-                // Rotasi dan scaling presisi menggunakan Metal GPU
-                var ciImage = CIImage(cvPixelBuffer: imageBuffer)
-                ciImage = ciImage.transformed(by: transform)
-                
-                // Normalisasi origin
-                ciImage = ciImage.transformed(by: CGAffineTransform(
-                    translationX: -ciImage.extent.origin.x,
-                    y: -ciImage.extent.origin.y
-                ))
-                
-                let scaleX = CGFloat(targetWidth) / ciImage.extent.width
-                let scaleY = CGFloat(targetHeight) / ciImage.extent.height
-                ciImage = ciImage.transformed(by: CGAffineTransform(scaleX: scaleX, y: scaleY))
-                
-                var pixelBufferOut: CVPixelBuffer?
-                if let pool = adaptor.pixelBufferPool {
-                    CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &pixelBufferOut)
-                } else {
-                    CVPixelBufferCreate(
-                        kCFAllocatorDefault,
-                        targetWidth,
-                        targetHeight,
-                        kCVPixelFormatType_32BGRA,
-                        pixelBufferAttributes as CFDictionary,
-                        &pixelBufferOut
-                    )
+                autoreleasepool {
+                    guard let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+                        pendingVideoBuffer = nil
+                        return
+                    }
+                    
+                    var ciImage = CIImage(cvPixelBuffer: imageBuffer)
+                    ciImage = ciImage.transformed(by: transform)
+                    ciImage = ciImage.transformed(by: CGAffineTransform(
+                        translationX: -ciImage.extent.origin.x,
+                        y: -ciImage.extent.origin.y
+                    ))
+                    
+                    // Skala video agar muat pas di kanvas tanpa melar (Aspect Fit)
+                    let scale = min(CGFloat(targetWidth) / ciImage.extent.width, CGFloat(targetHeight) / ciImage.extent.height)
+                    let scaledWidth = ciImage.extent.width * scale
+                    let scaledHeight = ciImage.extent.height * scale
+                    
+                    let offsetX = (CGFloat(targetWidth) - scaledWidth) / 2.0
+                    let offsetY = (CGFloat(targetHeight) - scaledHeight) / 2.0
+                    
+                    ciImage = ciImage.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+                    ciImage = ciImage.transformed(by: CGAffineTransform(translationX: offsetX, y: offsetY))
+                    
+                    var pixelBufferOut: CVPixelBuffer?
+                    if let pool = adaptor.pixelBufferPool {
+                        CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &pixelBufferOut)
+                    } else {
+                        CVPixelBufferCreate(
+                            kCFAllocatorDefault,
+                            targetWidth,
+                            targetHeight,
+                            kCVPixelFormatType_32BGRA,
+                            pixelBufferAttributes as CFDictionary,
+                            &pixelBufferOut
+                        )
+                    }
+                    
+                    if let destBuffer = pixelBufferOut {
+                        ciContext.render(ciImage, to: destBuffer)
+                        appendSuccess = adaptor.append(destBuffer, withPresentationTime: pts)
+                    }
                 }
                 
-                if let destBuffer = pixelBufferOut {
-                    ciContext.render(ciImage, to: destBuffer)
-                    adaptor.append(destBuffer, withPresentationTime: pts)
+                if appendSuccess {
+                    pendingVideoBuffer = nil
+                } else {
+                    break
                 }
             }
         }
         
         var isAudioDone = false
+        var pendingAudioBuffer: CMSampleBuffer? = nil
+        
         if let aIn = audioInput, let aOut = audioOutput {
             group.enter()
             aIn.requestMediaDataWhenReady(on: audioQueue) {
                 if isAudioDone { return }
+                
                 while aIn.isReadyForMoreMediaData {
-                    if let buffer = aOut.copyNextSampleBuffer() {
-                        aIn.append(buffer)
-                    } else {
+                    if pendingAudioBuffer == nil {
+                        pendingAudioBuffer = aOut.copyNextSampleBuffer()
+                    }
+                    
+                    guard let buffer = pendingAudioBuffer else {
                         if !isAudioDone {
                             isAudioDone = true
                             aIn.markAsFinished()
                             group.leave()
                         }
+                        break
+                    }
+                    
+                    if aIn.append(buffer) {
+                        pendingAudioBuffer = nil
+                    } else {
                         break
                     }
                 }
