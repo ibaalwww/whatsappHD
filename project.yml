@@ -10,8 +10,6 @@ targets:
     sources: [Sources]
     info:
       path: Sources/Info.plist
-      properties:
-        UILaunchStoryboardName: LaunchScreen
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.studio.whatsapphd
       TARGETED_DEVICE_FAMILY: "1"
