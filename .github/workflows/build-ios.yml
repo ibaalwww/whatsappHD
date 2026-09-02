@@ -1,6 +1,8 @@
-name: Build WhatsAppHD IPA
+name: Auto Build WhatsAppHD Unsigned IPA
 
 on:
+  push:
+    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
@@ -14,9 +16,9 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
-      - name: Generate Xcode Project
+      - name: Generate Xcode Project & Info.plist
         run: |
-          # Buat Info.plist otomatis ke dalam folder Sources
+          mkdir -p Sources
           cat <<EOF > Sources/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -37,66 +39,27 @@ jobs:
 
           xcodegen generate
 
-      - name: Setup Signing Keychain and Provisioning
-        env:
-          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
-          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
-          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        run: |
-          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
-          PP_PATH=$RUNNER_TEMP/build_profile.mobileprovision
-          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-
-          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
-          echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o $PP_PATH
-
-          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-
-          security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security list-keychain -d user -s $KEYCHAIN_PATH
-
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/
-
-      - name: Build Archive
+      - name: Build Unsigned App
         run: |
           xcodebuild -project WhatsAppHD.xcodeproj \
             -scheme WhatsAppHD \
             -configuration Release \
-            -archivePath $RUNNER_TEMP/WhatsAppHD.xcarchive \
-            archive \
-            CODE_SIGNING_ALLOWED=YES
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            clean build
 
-      - name: Export IPA
+      - name: Package App into .IPA
         run: |
-          cat <<EOF > $RUNNER_TEMP/ExportOptions.plist
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>ad-hoc</string>
-              <key>signingStyle</key>
-              <string>manual</string>
-              <key>stripSwiftSymbols</key>
-              <true/>
-              <key>compileBitcode</key>
-              <false/>
-          </dict>
-          </plist>
-          EOF
-
-          xcodebuild -exportArchive \
-            -archivePath $RUNNER_TEMP/WhatsAppHD.xcarchive \
-            -exportPath $RUNNER_TEMP/output \
-            -exportOptionsPlist $RUNNER_TEMP/ExportOptions.plist
+          mkdir -p Payload
+          APP_PATH=$(find build/Build/Products/Release-iphoneos -name "WhatsAppHD.app" -type d | head -n 1)
+          cp -R "$APP_PATH" Payload/
+          zip -r WhatsAppHD-Unsigned.ipa Payload
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WhatsAppHD-Release-IPA
-          path: ${{ runner.temp }}/output/*.ipa
+          name: WhatsAppHD-Unsigned-IPA
+          path: WhatsAppHD-Unsigned.ipa
