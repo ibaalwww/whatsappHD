@@ -1,11 +1,11 @@
 name: Build WhatsAppHD IPA
 
 on:
-  workflow_dispatch: # Memunculkan tombol "Run workflow" manual di web GitHub
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: macos-14 # Mac Apple Silicon M1/M2 gratis dari GitHub
+    runs-on: macos-14
 
     steps:
       - name: Checkout Code
@@ -15,7 +15,27 @@ jobs:
         run: brew install xcodegen
 
       - name: Generate Xcode Project
-        run: xcodegen generate
+        run: |
+          # Buat Info.plist otomatis ke dalam folder Sources
+          cat <<EOF > Sources/Info.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>UILaunchScreen</key>
+              <dict/>
+              <key>NSPhotoLibraryUsageDescription</key>
+              <string>Aplikasi butuh akses galeri untuk membaca video 4K.</string>
+              <key>UIApplicationSceneManifest</key>
+              <dict>
+                  <key>UIApplicationSupportsMultipleScenes</key>
+                  <false/>
+              </dict>
+          </dict>
+          </plist>
+          EOF
+
+          xcodegen generate
 
       - name: Setup Signing Keychain and Provisioning
         env:
@@ -24,7 +44,6 @@ jobs:
           BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
-          # 1. Dekode file sertifikat dan profile dari GitHub Secrets
           CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
           PP_PATH=$RUNNER_TEMP/build_profile.mobileprovision
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
@@ -32,17 +51,14 @@ jobs:
           echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
           echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o $PP_PATH
 
-          # 2. Buat temporary keychain di mesin macOS GitHub
           security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
 
-          # 3. Impor sertifikat p12 ke keychain
           security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           security list-keychain -d user -s $KEYCHAIN_PATH
 
-          # 4. Pasang Provisioning Profile ke folder sistem Xcode
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/
 
