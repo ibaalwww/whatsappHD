@@ -1,5 +1,7 @@
 import SwiftUI
+import UIKit
 import Photos
+import PhotosUI
 import UniformTypeIdentifiers
 
 struct ContentView: View {
@@ -103,7 +105,7 @@ struct ContentView: View {
                     Text("💡 CARA AGAR TIDAK DI-COMPRESS WA:")
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
                         .foregroundColor(Color(red: 0.83, green: 0.68, blue: 0.21))
-                    Text("1. Simpan ke Foto.\n2. Buka WA, kirim ke chat sendiri (You) dengan tombol [HD].\n3. Teruskan (Forward) video tersebut ke 'Status Saya'.")
+                    Text("1. Simpan ke Galeri.\n2. Buka WA, kirim ke chat sendiri (You) dengan tombol [HD].\n3. Teruskan (Forward) video tersebut ke 'Status Saya'.")
                         .font(.system(size: 9, design: .monospaced))
                         .foregroundColor(.gray)
                         .lineSpacing(2)
@@ -119,7 +121,6 @@ struct ContentView: View {
                 // Tombol Aksi Bawah
                 VStack(spacing: 10) {
                     if let outputURL = processedVideoURL {
-                        // Tombol Simpan Langsung ke Galeri
                         Button(action: { saveToPhotoLibrary(url: outputURL) }) {
                             HStack {
                                 Image(systemName: "square.and.arrow.down.fill")
