@@ -6,12 +6,14 @@ import ImageIO
 
 final class VideoCompressor: ObservableObject {
     @Published var isProcessing = false
+    @Published var progress: Double = 0.0
     @Published var statusMessage = "Siap memproses"
     
     func compressVideo(inputURL: URL, musicURL: URL? = nil) async throws -> URL {
         await MainActor.run {
             self.isProcessing = true
-            self.statusMessage = "Menganalisis frame 60 FPS..."
+            self.progress = 0.0
+            self.statusMessage = "Membaca struktur video 4K..."
         }
         
         let videoAsset = AVURLAsset(url: inputURL)
@@ -20,18 +22,37 @@ final class VideoCompressor: ObservableObject {
         }
         
         let videoDuration = try await videoAsset.load(.duration)
+        let totalDurationSeconds = CMTimeGetSeconds(videoDuration)
+        let naturalSize = try await videoTrack.load(.naturalSize)
         let transform = try await videoTrack.load(.preferredTransform)
-        let orientation = getOrientation(from: transform)
         
-        let isPortrait = (orientation == .right || orientation == .left || orientation == .rightMirrored || orientation == .leftMirrored)
+        // 1. DETEKSI ORIENTASI (ANTI SALAH LANDSCAPE)
+        let transformedRect = CGRect(origin: .zero, size: naturalSize).applying(transform)
+        let isPortrait = abs(transformedRect.height) >= abs(transformedRect.width)
+        
         let targetWidth: Int = isPortrait ? 1080 : 1920
         let targetHeight: Int = isPortrait ? 1920 : 1080
         
+        // Hitung sudut rotasi EXIF
+        let angle = atan2(transform.b, transform.a)
+        let degrees = Int(round(angle * 180 / .pi))
+        let orientation: CGImagePropertyOrientation
+        switch degrees {
+        case 90:
+            orientation = .right
+        case -90, 270:
+            orientation = .left
+        case 180, -180:
+            orientation = .down
+        default:
+            orientation = .up
+        }
+        
         let outputURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("WA_60FPS_\(UUID().uuidString).mp4")
+            .appendingPathComponent("PURE_60FPS_\(UUID().uuidString).mp4")
         try? FileManager.default.removeItem(at: outputURL)
         
-        // 1. SETUP READER VIDEO
+        // 2. SETUP READER
         let reader = try AVAssetReader(asset: videoAsset)
         let videoOutput = AVAssetReaderTrackOutput(
             track: videoTrack,
@@ -42,7 +63,7 @@ final class VideoCompressor: ObservableObject {
             reader.add(videoOutput)
         }
         
-        // 2. SETUP AUDIO (Dipotong tepat sesuai durasi video asli)
+        // 3. SETUP AUDIO (Potong sinkron dengan durasi video)
         var audioAsset = videoAsset
         if let customMusic = musicURL {
             audioAsset = AVURLAsset(url: customMusic)
@@ -67,7 +88,7 @@ final class VideoCompressor: ObservableObject {
             }
         }
         
-        // 3. SETUP WRITER (Kunci 3.0 Mbps & 60 FPS murni)
+        // 4. SETUP WRITER (FORMULA PURESTATUS WA: LEVEL 4.1 & 2.8 MBPS)
         let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
         writer.shouldOptimizeForNetworkUse = true
         
@@ -76,9 +97,9 @@ final class VideoCompressor: ObservableObject {
             AVVideoWidthKey: targetWidth,
             AVVideoHeightKey: targetHeight,
             AVVideoCompressionPropertiesKey: [
-                AVVideoAverageBitRateKey: 3_000_000,
-                AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
-                AVVideoMaxKeyFrameIntervalKey: 60,
+                AVVideoAverageBitRateKey: 2_800_000, // 2.8 Mbps: Batas aman anti-begal WA
+                AVVideoProfileLevelKey: AVVideoProfileLevelH264High41, // KUNCI UTAMA: Wajib Level 4.1
+                AVVideoMaxKeyFrameIntervalKey: 60, // GOP 1 detik
                 AVVideoExpectedSourceFrameRateKey: 60
             ]
         ]
@@ -120,14 +141,14 @@ final class VideoCompressor: ObservableObject {
             }
         }
         
-        // 4. EKSEKUSI RENDER METAL
+        // 5. RENDERING PIPELINE
         reader.startReading()
         audioReader?.startReading()
         writer.startWriting()
         writer.startSession(atSourceTime: .zero)
         
         await MainActor.run {
-            self.statusMessage = "Merender frame 60 FPS murni..."
+            self.statusMessage = "Mengunci 60.0 FPS murni..."
         }
         
         let ciContext = CIContext(options: [.useSoftwareRenderer: false])
@@ -157,7 +178,6 @@ final class VideoCompressor: ObservableObject {
                     break
                 }
                 
-                // KUNCI 60 FPS STABIL: Paksa interval presisi 16.6ms per frame
                 let forcedPTS = CMTime(value: frameIndex * 1000, timescale: 60000)
                 var appendSuccess = false
                 
@@ -202,12 +222,22 @@ final class VideoCompressor: ObservableObject {
                 if appendSuccess {
                     pendingVideoBuffer = nil
                     frameIndex += 1
+                    
+                    // Update progress bar
+                    if totalDurationSeconds > 0 {
+                        let currentSec = Double(frameIndex) / 60.0
+                        let p = min(currentSec / totalDurationSeconds, 1.0)
+                        DispatchQueue.main.async {
+                            self.progress = p
+                        }
+                    }
                 } else {
                     break
                 }
             }
         }
         
+        // Audio Loop
         var isAudioDone = false
         var pendingAudioBuffer: CMSampleBuffer? = nil
         
@@ -259,24 +289,14 @@ final class VideoCompressor: ObservableObject {
         await writer.finishWriting()
         
         await MainActor.run {
+            self.progress = 1.0
             self.isProcessing = false
         }
         
         if writer.status == .completed {
             return outputURL
         } else {
-            throw writer.error ?? NSError(domain: "Compressor", code: -2, userInfo: [NSLocalizedDescriptionKey: "Gagal encoding."])
+            throw writer.error ?? NSError(domain: "Compressor", code: -2, userInfo: [NSLocalizedDescriptionKey: "Gagal encoding video."])
         }
-    }
-    
-    private func getOrientation(from transform: CGAffineTransform) -> CGImagePropertyOrientation {
-        if transform.a == 0 && transform.b > 0 && transform.c < 0 {
-            return .right
-        } else if transform.a == 0 && transform.b < 0 && transform.c > 0 {
-            return .left
-        } else if transform.a < 0 && transform.d < 0 {
-            return .down
-        }
-        return .up
     }
 }
