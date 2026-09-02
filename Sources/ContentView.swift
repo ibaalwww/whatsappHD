@@ -19,23 +19,21 @@ struct ContentView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                // Background hitam pekat AMOLED
                 Color.black.ignoresSafeArea()
                 
                 VStack(spacing: 0) {
-                    // 1. TOP BAR
+                    // Header Bar
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("STATUS PURIFIER")
+                            Text("iBAAL STATUS")
                                 .font(.system(size: 16, weight: .black, design: .rounded))
                                 .foregroundColor(.white)
-                            Text("60 FPS ULTRA COMPRESSOR")
+                            Text("ULTRA 60 FPS ENGINE")
                                 .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .foregroundColor(Color(red: 0.18, green: 0.80, blue: 0.44)) // WhatsApp Green
+                                .foregroundColor(Color(red: 0.83, green: 0.68, blue: 0.21))
                         }
                         Spacer()
                         
-                        // Badge HD
                         HStack(spacing: 4) {
                             Circle()
                                 .fill(processedVideoURL != nil ? Color.green : Color.gray)
@@ -54,10 +52,9 @@ struct ContentView: View {
                     
                     Spacer()
                     
-                    // 2. MAIN PREVIEW CARD (CENTER)
+                    // Main Preview Card
                     VStack(spacing: 16) {
                         if compressor.isProcessing {
-                            // Tampilan Processing
                             VStack(spacing: 14) {
                                 ZStack {
                                     Circle()
@@ -65,7 +62,7 @@ struct ContentView: View {
                                         .frame(width: 80, height: 80)
                                     Circle()
                                         .trim(from: 0, to: compressor.progress)
-                                        .stroke(Color(red: 0.18, green: 0.80, blue: 0.44), style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                                        .stroke(Color(red: 0.83, green: 0.68, blue: 0.21), style: StrokeStyle(lineWidth: 6, lineCap: .round))
                                         .frame(width: 80, height: 80)
                                         .rotationEffect(.degrees(-90))
                                         .animation(.linear, value: compressor.progress)
@@ -80,22 +77,20 @@ struct ContentView: View {
                                     .foregroundColor(.gray)
                             }
                         } else if processedVideoURL != nil {
-                            // Tampilan Video Sukses Siap Kirim
                             VStack(spacing: 12) {
                                 Image(systemName: "checkmark.seal.fill")
                                     .font(.system(size: 54))
-                                    .foregroundColor(Color(red: 0.18, green: 0.80, blue: 0.44))
+                                    .foregroundColor(Color(red: 0.83, green: 0.68, blue: 0.21))
                                 
-                                Text("VIDEO SIAP DIPASANG")
+                                Text("SIAP DIUNGGAH KE STATUS")
                                     .font(.system(size: 14, weight: .bold, design: .rounded))
                                     .foregroundColor(.white)
                                 
-                                Text("1080x1920 • 60 FPS • High Profile 4.1")
+                                Text("1080x1920 • 60 FPS Murni")
                                     .font(.system(size: 11, design: .monospaced))
                                     .foregroundColor(.gray)
                             }
                         } else {
-                            // Tampilan Idle (Belum pilih video)
                             Button(action: { showVideoPicker = true }) {
                                 VStack(spacing: 12) {
                                     ZStack {
@@ -111,7 +106,7 @@ struct ContentView: View {
                                         .font(.system(size: 12, weight: .bold, design: .monospaced))
                                         .foregroundColor(.white)
                                     
-                                    Text(videoDetails ?? "Mendukung 4K 60 FPS Camera")
+                                    Text(videoDetails ?? "Ketuk untuk impor video galeri")
                                         .font(.system(size: 10, design: .monospaced))
                                         .foregroundColor(.gray)
                                 }
@@ -128,10 +123,10 @@ struct ContentView: View {
                     )
                     .padding(.horizontal, 20)
                     
-                    // 3. OPTIONAL MUSIC BAR
+                    // Music Bar
                     HStack {
                         Image(systemName: "music.note")
-                            .foregroundColor(selectedMusicURL != nil ? Color.green : .gray)
+                            .foregroundColor(selectedMusicURL != nil ? Color(red: 0.83, green: 0.68, blue: 0.21) : .gray)
                         
                         if let music = selectedMusicURL {
                             Text(music.lastPathComponent)
@@ -144,7 +139,7 @@ struct ContentView: View {
                                     .foregroundColor(.gray)
                             }
                         } else {
-                            Text("Ganti Musik Latar (Opsional)")
+                            Text("Tambahkan Musik Latar (Opsional)")
                                 .font(.system(size: 11, design: .monospaced))
                                 .foregroundColor(.gray)
                             Spacer()
@@ -152,7 +147,7 @@ struct ContentView: View {
                                 showMusicPicker = true
                             }
                             .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .foregroundColor(Color(red: 0.18, green: 0.80, blue: 0.44))
+                            .foregroundColor(Color(red: 0.83, green: 0.68, blue: 0.21))
                         }
                     }
                     .padding(.horizontal, 16)
@@ -164,10 +159,9 @@ struct ContentView: View {
                     
                     Spacer()
                     
-                    // 4. ACTION BUTTONS (BOTTOM)
+                    // Action Buttons
                     VStack(spacing: 10) {
                         if let outputURL = processedVideoURL {
-                            // Tombol Simpan ke Galeri (Native Anti-Crash)
                             Button(action: { saveVideoSafely(url: outputURL) }) {
                                 HStack(spacing: 8) {
                                     Image(systemName: "square.and.arrow.down.fill")
@@ -177,11 +171,10 @@ struct ContentView: View {
                                 .foregroundColor(.black)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 52)
-                                .background(Color(red: 0.18, green: 0.80, blue: 0.44))
+                                .background(Color(red: 0.83, green: 0.68, blue: 0.21))
                                 .cornerRadius(14)
                             }
                             
-                            // Tombol Share Sheet Langsung
                             Button(action: { showShareSheet = true }) {
                                 HStack(spacing: 8) {
                                     Image(systemName: "paperplane.fill")
@@ -196,7 +189,6 @@ struct ContentView: View {
                             }
                         }
                         
-                        // Tombol Ganti / Pilih Video
                         Button(action: { showVideoPicker = true }) {
                             HStack(spacing: 8) {
                                 Image(systemName: "photo.on.rectangle")
@@ -217,7 +209,7 @@ struct ContentView: View {
             }
         }
         .alert(isPresented: $showAlert) {
-            Alert(title: Text("Info"), message: Text(alertMessage ?? ""), dismissButton: .default(Text("OK")))
+            Alert(title: Text("iBaal Status"), message: Text(alertMessage ?? ""), dismissButton: .default(Text("OK")))
         }
         .sheet(isPresented: $showVideoPicker) {
             NativeVideoPicker { url in
@@ -281,7 +273,6 @@ struct ContentView: View {
     }
 }
 
-// UIKit Safe Video Saver (Anti Crash)
 class VideoSaver: NSObject {
     var onSuccess: (() -> Void)?
     var onError: ((Error) -> Void)?
@@ -301,7 +292,6 @@ class VideoSaver: NSObject {
     }
 }
 
-// Native Video Picker (Force Raw Original)
 struct NativeVideoPicker: UIViewControllerRepresentable {
     var onVideoPicked: (URL) -> Void
     @Environment(\.presentationMode) private var presentationMode
