@@ -4,124 +4,141 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @StateObject private var compressor = VideoCompressor()
-    @State private var showPicker = false
+    @State private var showVideoPicker = false
+    @State private var showMusicPicker = false
+    
+    @State private var selectedVideoURL: URL? = nil
+    @State private var selectedMusicURL: URL? = nil
     @State private var processedVideoURL: URL? = nil
     @State private var showShareSheet = false
-    @State private var sourceVideoInfo: String? = nil
-    @State private var fitToWhatsAppScreen = true // Mode Anti-Zoom WA bawaan aktif
+    @State private var videoInfoText: String? = nil
     
     var body: some View {
         ZStack {
-            Color(red: 0.06, green: 0.07, blue: 0.08).ignoresSafeArea()
+            Color(UIColor.systemBackground).ignoresSafeArea()
             
             VStack(spacing: 20) {
-                // Header Minimalis
+                // Header Ringkas
                 VStack(spacing: 4) {
                     Text("STATUS PURIFIER")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .tracking(2.5)
-                        .foregroundColor(.white)
-                    
-                    Text("60 FPS • 1080P MASTER ENGINE")
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundColor(Color(red: 0.83, green: 0.68, blue: 0.21))
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .tracking(2)
+                    Text("ANTI-BEGAL 1080P 60 FPS")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundColor(.secondary)
                 }
-                .padding(.top, 24)
+                .padding(.top, 16)
                 
-                Spacer()
-                
-                // Status Box Ramping
+                // Card Pratinjau & Status
                 VStack(spacing: 12) {
                     if compressor.isProcessing {
                         ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: Color(red: 0.83, green: 0.68, blue: 0.21)))
                             .scaleEffect(1.2)
-                        
                         Text(compressor.statusMessage)
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(.gray)
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
-                            .padding(.horizontal, 16)
+                            .padding(.horizontal)
                     } else if processedVideoURL != nil {
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 36))
-                            .foregroundColor(Color(red: 0.83, green: 0.68, blue: 0.21))
-                        
-                        Text("1080P 60 FPS SIAP STATUS")
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white)
-                        
-                        if let info = sourceVideoInfo {
-                            Text(info)
-                                .font(.system(size: 9, design: .monospaced))
-                                .foregroundColor(.gray)
-                        }
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 40))
+                            .foregroundColor(.green)
+                        Text("VIDEO SIAP UNGGAH")
+                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        Text("1080x1920 • 60 FPS • 3.0 Mbps")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.secondary)
                     } else {
                         Image(systemName: "video.badge.waveform")
                             .font(.system(size: 36))
-                            .foregroundColor(.gray.opacity(0.8))
-                        
-                        Text("PILIH VIDEO DARI GALERI")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
-                            .foregroundColor(.gray)
+                            .foregroundColor(.secondary)
+                        Text(videoInfoText ?? "Pilih Master Video 4K")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(.secondary)
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: 180)
-                .background(Color(red: 0.10, green: 0.11, blue: 0.13))
-                .cornerRadius(14)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(Color.white.opacity(0.06), lineWidth: 1)
-                )
+                .frame(height: 150)
+                .background(Color(UIColor.secondarySystemBackground))
+                .cornerRadius(12)
                 .padding(.horizontal, 20)
                 
-                // Switch Anti-Zoom WhatsApp
-                VStack(alignment: .leading, spacing: 6) {
-                    Toggle(isOn: $fitToWhatsAppScreen) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("MODE ANTI-ZOOM WHATSAPP")
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .foregroundColor(.white)
-                            Text("Cegah video terpotong/di-crop oleh status WA")
-                                .font(.system(size: 9, design: .monospaced))
-                                .foregroundColor(.gray)
+                // Panel Musik Tambahan (Opsional)
+                VStack(spacing: 8) {
+                    HStack {
+                        Image(systemName: "music.note")
+                            .foregroundColor(.secondary)
+                        if let music = selectedMusicURL {
+                            Text(music.lastPathComponent)
+                                .font(.system(size: 11, design: .monospaced))
+                                .lineLimit(1)
+                            Spacer()
+                            Button(action: { selectedMusicURL = nil }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.secondary)
+                            }
+                        } else {
+                            Text("Musik Latar (Opsional)")
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Button("Pilih") {
+                                showMusicPicker = true
+                            }
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
                         }
                     }
-                    .toggleStyle(SwitchToggleStyle(tint: Color(red: 0.83, green: 0.68, blue: 0.21)))
+                    .padding(.horizontal, 14)
+                    .frame(height: 44)
+                    .background(Color(UIColor.secondarySystemBackground))
+                    .cornerRadius(10)
                 }
                 .padding(.horizontal, 20)
-                .padding(.vertical, 8)
                 
                 Spacer()
                 
-                // Action Buttons
+                // Tombol Aksi
                 VStack(spacing: 10) {
                     if processedVideoURL != nil {
                         Button(action: { showShareSheet = true }) {
-                            HStack(spacing: 8) {
+                            HStack {
                                 Image(systemName: "paperplane.fill")
                                 Text("BAGIKAN KE WHATSAPP")
                             }
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .foregroundColor(.black)
+                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
-                            .frame(height: 48)
-                            .background(Color(red: 0.83, green: 0.68, blue: 0.21))
+                            .frame(height: 46)
+                            .background(Color.green)
                             .cornerRadius(10)
                         }
                     }
                     
-                    Button(action: { showPicker = true }) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "square.and.arrow.down")
-                            Text(processedVideoURL == nil ? "IMPORT VIDEO DARI FOTO" : "GANTI VIDEO LAIN")
+                    if selectedVideoURL != nil && !compressor.isProcessing {
+                        Button(action: { startProcessing() }) {
+                            HStack {
+                                Image(systemName: "bolt.fill")
+                                Text("PROSES ULANG SEKARANG")
+                            }
+                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 46)
+                            .background(Color.blue)
+                            .cornerRadius(10)
                         }
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
+                    }
+                    
+                    Button(action: { showVideoPicker = true }) {
+                        HStack {
+                            Image(systemName: "photo.on.rectangle.angled")
+                            Text(selectedVideoURL == nil ? "IMPORT VIDEO 4K" : "GANTI VIDEO")
+                        }
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .foregroundColor(.primary)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 48)
-                        .background(Color(red: 0.14, green: 0.16, blue: 0.19))
+                        .frame(height: 46)
+                        .background(Color(UIColor.secondarySystemBackground))
                         .cornerRadius(10)
                     }
                     .disabled(compressor.isProcessing)
@@ -130,38 +147,53 @@ struct ContentView: View {
                 .padding(.bottom, 20)
             }
         }
-        .sheet(isPresented: $showPicker) {
-            NativeVideoPicker { rawVideoURL in
+        .sheet(isPresented: $showVideoPicker) {
+            NativeVideoPicker { url in
+                selectedVideoURL = url
                 Task {
-                    do {
-                        let asset = AVURLAsset(url: rawVideoURL)
-                        if let track = try? await asset.loadTracks(withMediaType: .video).first,
-                           let size = try? await track.load(.naturalSize),
-                           let fps = try? await track.load(.nominalFrameRate) {
-                            await MainActor.run {
-                                self.sourceVideoInfo = "\(Int(size.width))x\(Int(size.height)) • \(Int(round(fps))) FPS"
-                            }
-                        }
-                        
-                        let resultURL = try await compressor.compressVideo(
-                            inputURL: rawVideoURL,
-                            fitWhatsAppScreen: fitToWhatsAppScreen
-                        )
+                    let asset = AVURLAsset(url: url)
+                    if let track = try? await asset.loadTracks(withMediaType: .video).first,
+                       let size = try? await track.load(.naturalSize),
+                       let fps = try? await track.load(.nominalFrameRate) {
                         await MainActor.run {
-                            self.processedVideoURL = resultURL
-                            self.showShareSheet = true
-                        }
-                    } catch {
-                        await MainActor.run {
-                            self.compressor.statusMessage = "Gagal: \(error.localizedDescription)"
+                            self.videoInfoText = "\(Int(size.width))x\(Int(size.height)) • \(Int(round(fps))) FPS"
                         }
                     }
+                    startProcessing()
+                }
+            }
+        }
+        .sheet(isPresented: $showMusicPicker) {
+            AudioPicker { url in
+                selectedMusicURL = url
+                if selectedVideoURL != nil {
+                    startProcessing()
                 }
             }
         }
         .sheet(isPresented: $showShareSheet) {
             if let url = processedVideoURL {
                 ShareSheet(activityItems: [url])
+            }
+        }
+    }
+    
+    private func startProcessing() {
+        guard let videoURL = selectedVideoURL else { return }
+        Task {
+            do {
+                let result = try await compressor.compressVideo(
+                    inputURL: videoURL,
+                    musicURL: selectedMusicURL
+                )
+                await MainActor.run {
+                    self.processedVideoURL = result
+                    self.showShareSheet = true
+                }
+            } catch {
+                await MainActor.run {
+                    self.compressor.statusMessage = "Gagal: \(error.localizedDescription)"
+                }
             }
         }
     }
@@ -175,7 +207,6 @@ struct NativeVideoPicker: UIViewControllerRepresentable {
         var config = PHPickerConfiguration()
         config.filter = .videos
         config.preferredAssetRepresentationMode = .current
-        
         let picker = PHPickerViewController(configuration: config)
         picker.delegate = context.coordinator
         return picker
@@ -198,14 +229,12 @@ struct NativeVideoPicker: UIViewControllerRepresentable {
             parent.presentationMode.wrappedValue.dismiss()
             guard let provider = results.first?.itemProvider else { return }
 
-            provider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) { url, error in
+            provider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) { url, _ in
                 guard let sourceURL = url else { return }
-                let tempDir = FileManager.default.temporaryDirectory
-                let targetURL = tempDir.appendingPathComponent("RAW_\(UUID().uuidString)_\(sourceURL.lastPathComponent)")
-                try? FileManager.default.copyItem(at: sourceURL, to: targetURL)
-                
+                let temp = FileManager.default.temporaryDirectory.appendingPathComponent("RAW_\(UUID().uuidString)_\(sourceURL.lastPathComponent)")
+                try? FileManager.default.copyItem(at: sourceURL, to: temp)
                 DispatchQueue.main.async {
-                    self.parent.onVideoPicked(targetURL)
+                    self.parent.onVideoPicked(temp)
                 }
             }
         }
