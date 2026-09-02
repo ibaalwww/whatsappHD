@@ -13,7 +13,7 @@ final class VideoCompressor: ObservableObject {
         await MainActor.run {
             self.isProcessing = true
             self.progress = 0.0
-            self.statusMessage = "Membaca struktur video 4K..."
+            self.statusMessage = "Membaca struktur video..."
         }
         
         let videoAsset = AVURLAsset(url: inputURL)
@@ -26,14 +26,13 @@ final class VideoCompressor: ObservableObject {
         let naturalSize = try await videoTrack.load(.naturalSize)
         let transform = try await videoTrack.load(.preferredTransform)
         
-        // 1. DETEKSI ORIENTASI (ANTI SALAH LANDSCAPE)
+        // 1. DETEKSI ORIENTASI (SELALU KUNCI PORTRAIT JIKA TINGGI >= LEBAR)
         let transformedRect = CGRect(origin: .zero, size: naturalSize).applying(transform)
         let isPortrait = abs(transformedRect.height) >= abs(transformedRect.width)
         
         let targetWidth: Int = isPortrait ? 1080 : 1920
         let targetHeight: Int = isPortrait ? 1920 : 1080
         
-        // Hitung sudut rotasi EXIF
         let angle = atan2(transform.b, transform.a)
         let degrees = Int(round(angle * 180 / .pi))
         let orientation: CGImagePropertyOrientation
@@ -52,7 +51,7 @@ final class VideoCompressor: ObservableObject {
             .appendingPathComponent("PURE_60FPS_\(UUID().uuidString).mp4")
         try? FileManager.default.removeItem(at: outputURL)
         
-        // 2. SETUP READER
+        // 2. SETUP READER VIDEO
         let reader = try AVAssetReader(asset: videoAsset)
         let videoOutput = AVAssetReaderTrackOutput(
             track: videoTrack,
@@ -63,7 +62,7 @@ final class VideoCompressor: ObservableObject {
             reader.add(videoOutput)
         }
         
-        // 3. SETUP AUDIO (Potong sinkron dengan durasi video)
+        // 3. SETUP AUDIO (SINKRON DENGAN DURASI VIDEO)
         var audioAsset = videoAsset
         if let customMusic = musicURL {
             audioAsset = AVURLAsset(url: customMusic)
@@ -88,7 +87,7 @@ final class VideoCompressor: ObservableObject {
             }
         }
         
-        // 4. SETUP WRITER (FORMULA PURESTATUS WA: LEVEL 4.1 & 2.8 MBPS)
+        // 4. SETUP WRITER (KUNCI AUTO-LEVEL + 2.8 MBPS ANTI MACET)
         let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
         writer.shouldOptimizeForNetworkUse = true
         
@@ -97,9 +96,9 @@ final class VideoCompressor: ObservableObject {
             AVVideoWidthKey: targetWidth,
             AVVideoHeightKey: targetHeight,
             AVVideoCompressionPropertiesKey: [
-                AVVideoAverageBitRateKey: 2_800_000, // 2.8 Mbps: Batas aman anti-begal WA
-                AVVideoProfileLevelKey: AVVideoProfileLevelH264High41, // KUNCI UTAMA: Wajib Level 4.1
-                AVVideoMaxKeyFrameIntervalKey: 60, // GOP 1 detik
+                AVVideoAverageBitRateKey: 2_800_000, // 2.8 Mbps: Toleransi aman WA
+                AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel, // Diizinkan hardware Apple untuk 60 FPS
+                AVVideoMaxKeyFrameIntervalKey: 60, // Keyframe tiap 60 frame (1 detik)
                 AVVideoExpectedSourceFrameRateKey: 60
             ]
         ]
@@ -141,19 +140,24 @@ final class VideoCompressor: ObservableObject {
             }
         }
         
-        // 5. RENDERING PIPELINE
-        reader.startReading()
+        // 5. EKSEKUSI RENDERING DENGAN DETEKSI ERROR
+        guard reader.startReading() else {
+            throw reader.error ?? NSError(domain: "Compressor", code: -3, userInfo: [NSLocalizedDescriptionKey: "Reader gagal start."])
+        }
         audioReader?.startReading()
-        writer.startWriting()
+        
+        guard writer.startWriting() else {
+            throw writer.error ?? NSError(domain: "Compressor", code: -4, userInfo: [NSLocalizedDescriptionKey: "Writer gagal start: \(writer.error?.localizedDescription ?? "")"])
+        }
         writer.startSession(atSourceTime: .zero)
         
         await MainActor.run {
-            self.statusMessage = "Mengunci 60.0 FPS murni..."
+            self.statusMessage = "Mengompresi ke 60.0 FPS murni..."
         }
         
         let ciContext = CIContext(options: [.useSoftwareRenderer: false])
-        let videoQueue = DispatchQueue(label: "videoCompressQueue")
-        let audioQueue = DispatchQueue(label: "audioCompressQueue")
+        let videoQueue = DispatchQueue(label: "videoCompressQueue", qos: .userInitiated)
+        let audioQueue = DispatchQueue(label: "audioCompressQueue", qos: .userInitiated)
         let group = DispatchGroup()
         
         var isVideoDone = false
@@ -223,21 +227,28 @@ final class VideoCompressor: ObservableObject {
                     pendingVideoBuffer = nil
                     frameIndex += 1
                     
-                    // Update progress bar
-                    if totalDurationSeconds > 0 {
+                    // Update progress setiap 6 frame (0.1 detik sekali)
+                    if totalDurationSeconds > 0 && frameIndex % 6 == 0 {
                         let currentSec = Double(frameIndex) / 60.0
-                        let p = min(currentSec / totalDurationSeconds, 1.0)
+                        let p = min(currentSec / totalDurationSeconds, 0.99)
                         DispatchQueue.main.async {
                             self.progress = p
                         }
                     }
                 } else {
+                    // Cek jika writer mengalami error di tengah jalan
+                    if writer.status == .failed {
+                        if !isVideoDone {
+                            isVideoDone = true
+                            videoInput.markAsFinished()
+                            group.leave()
+                        }
+                    }
                     break
                 }
             }
         }
         
-        // Audio Loop
         var isAudioDone = false
         var pendingAudioBuffer: CMSampleBuffer? = nil
         
@@ -296,7 +307,7 @@ final class VideoCompressor: ObservableObject {
         if writer.status == .completed {
             return outputURL
         } else {
-            throw writer.error ?? NSError(domain: "Compressor", code: -2, userInfo: [NSLocalizedDescriptionKey: "Gagal encoding video."])
+            throw writer.error ?? NSError(domain: "Compressor", code: -2, userInfo: [NSLocalizedDescriptionKey: "Gagal encoding: \(writer.error?.localizedDescription ?? "Unknown")"])
         }
     }
 }
