@@ -9,7 +9,7 @@ final class VideoCompressor: ObservableObject {
     func compressVideo(inputURL: URL) async throws -> URL {
         await MainActor.run {
             self.isProcessing = true
-            self.statusMessage = "Menganalisis metadata 60 FPS..."
+            self.statusMessage = "Membaca stream 60 FPS asli..."
         }
         
         let asset = AVURLAsset(url: inputURL)
@@ -20,7 +20,6 @@ final class VideoCompressor: ObservableObject {
         let naturalSize = try await videoTrack.load(.naturalSize)
         let transform = try await videoTrack.load(.preferredTransform)
         
-        // Deteksi apakah video portrait (vertikal) atau landscape
         let isPortrait = abs(transform.b) == 1.0 && abs(transform.c) == 1.0
         let targetWidth: Int = isPortrait ? 1080 : 1920
         let targetHeight: Int = isPortrait ? 1920 : 1080
@@ -29,38 +28,38 @@ final class VideoCompressor: ObservableObject {
             .appendingPathComponent("WA_HD_60FPS_\(UUID().uuidString).mp4")
         try? FileManager.default.removeItem(at: outputURL)
         
-        // 1. Setup Reader dengan Video Composition (Kunci 60 FPS murni)
+        // 1. Setup Reader dengan Frame Timing Lock
         let reader = try AVAssetReader(asset: asset)
         
         let videoComposition = AVMutableVideoComposition()
         videoComposition.renderSize = CGSize(width: targetWidth, height: targetHeight)
-        videoComposition.frameDuration = CMTime(value: 1, timescale: 60) // LOCK 60 FPS
+        videoComposition.frameDuration = CMTime(value: 1, timescale: 60)
+        // KUNCI UTAMA: Paksa compositor sinkron ke 60 FPS track sumber
+        videoComposition.sourceTrackIDForFrameTiming = videoTrack.trackID
         
         let instruction = AVMutableVideoCompositionInstruction()
         let duration = try await asset.load(.duration)
         instruction.timeRange = CMTimeRange(start: .zero, duration: duration)
         
         let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: videoTrack)
-        
-        // Hitung scaling agar video 4K pas ke 1080p tanpa distorsi
         let sourceWidth = isPortrait ? naturalSize.height : naturalSize.width
         let sourceHeight = isPortrait ? naturalSize.width : naturalSize.height
         let scale = max(CGFloat(targetWidth) / sourceWidth, CGFloat(targetHeight) / sourceHeight)
         
         var finalTransform = transform
-        if transform.b == 1.0 { // Portrait standard iPhone
+        if transform.b == 1.0 {
             finalTransform = CGAffineTransform(rotationAngle: .pi / 2)
                 .concatenating(CGAffineTransform(scaleX: scale, y: scale))
                 .concatenating(CGAffineTransform(translationX: CGFloat(targetWidth), y: 0))
-        } else if transform.c == -1.0 { // Portrait terbalik
+        } else if transform.c == -1.0 {
             finalTransform = CGAffineTransform(rotationAngle: -.pi / 2)
                 .concatenating(CGAffineTransform(scaleX: scale, y: scale))
                 .concatenating(CGAffineTransform(translationX: 0, y: CGFloat(targetHeight)))
-        } else if transform.a == -1.0 { // Landscape terbalik
+        } else if transform.a == -1.0 {
             finalTransform = CGAffineTransform(rotationAngle: .pi)
                 .concatenating(CGAffineTransform(scaleX: scale, y: scale))
                 .concatenating(CGAffineTransform(translationX: CGFloat(targetWidth), y: CGFloat(targetHeight)))
-        } else { // Landscape normal
+        } else {
             finalTransform = CGAffineTransform(scaleX: scale, y: scale)
         }
         
@@ -79,13 +78,10 @@ final class VideoCompressor: ObservableObject {
             reader.add(videoOutput)
         }
         
-        // Audio Track Reader
+        // Audio Track
         var audioOutput: AVAssetReaderTrackOutput? = nil
         if let audioTrack = try? await asset.loadTracks(withMediaType: .audio).first {
-            let aOut = AVAssetReaderTrackOutput(
-                track: audioTrack,
-                outputSettings: [AVFormatIDKey: kAudioFormatLinearPCM]
-            )
+            let aOut = AVAssetReaderTrackOutput(track: audioTrack, outputSettings: [AVFormatIDKey: kAudioFormatLinearPCM])
             aOut.alwaysCopiesSampleData = false
             if reader.canAdd(aOut) {
                 reader.add(aOut)
@@ -93,29 +89,31 @@ final class VideoCompressor: ObservableObject {
             }
         }
         
-        // 2. Setup Writer dengan Rumus Anti-Begal
+        // 2. Setup Writer dengan Media TimeScale 600
         let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
-        writer.shouldOptimizeForNetworkUse = true // Faststart: Moov atom di awal file
+        writer.shouldOptimizeForNetworkUse = true
         
         let videoSettings: [String: Any] = [
             AVVideoCodecKey: AVVideoCodecType.h264,
             AVVideoWidthKey: targetWidth,
             AVVideoHeightKey: targetHeight,
             AVVideoCompressionPropertiesKey: [
-                AVVideoAverageBitRateKey: 4_500_000, // 4.5 Mbps (Ambang aman HD WhatsApp)
+                AVVideoAverageBitRateKey: 4_500_000,
                 AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
-                AVVideoMaxKeyFrameIntervalKey: 60,   // Keyframe tiap 60 frame = Tepat 1 detik!
+                AVVideoMaxKeyFrameIntervalKey: 60,
                 AVVideoExpectedSourceFrameRateKey: 60
             ]
         ]
         
         let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
         videoInput.expectsMediaDataInRealTime = false
+        // KUNCI METADATA: Standar industri Apple untuk presisi 60 FPS
+        videoInput.mediaTimeScale = 600
+        
         if writer.canAdd(videoInput) {
             writer.add(videoInput)
         }
         
-        // Audio Writer (AAC-LC 128 kbps)
         var audioInput: AVAssetWriterInput? = nil
         if audioOutput != nil {
             let audioSettings: [String: Any] = [
@@ -132,13 +130,12 @@ final class VideoCompressor: ObservableObject {
             }
         }
         
-        // 3. Eksekusi Encoding Hardware-Accelerated
         reader.startReading()
         writer.startWriting()
         writer.startSession(atSourceTime: .zero)
         
         await MainActor.run {
-            self.statusMessage = "Merender 1080p 60 FPS Anti-Begal..."
+            self.statusMessage = "Mengompresi ke 1080p 60 FPS Anti-Begal..."
         }
         
         let videoQueue = DispatchQueue(label: "videoCompressQueue")
