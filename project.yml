@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: com.studio
   deploymentTarget:
     iOS: "16.0"
+  xcodeVersion: "15.4"
 targets:
   WhatsAppHD:
     type: application
