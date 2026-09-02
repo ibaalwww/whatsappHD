@@ -2,6 +2,7 @@ import Foundation
 import AVFoundation
 import CoreMedia
 import CoreImage
+import ImageIO
 
 final class VideoCompressor: ObservableObject {
     @Published var isProcessing = false
@@ -18,7 +19,6 @@ final class VideoCompressor: ObservableObject {
             throw NSError(domain: "Compressor", code: -1, userInfo: [NSLocalizedDescriptionKey: "Track video tidak ditemukan."])
         }
         
-        // KUNCI UTAMA DURASI: Ambil durasi eksak video asli
         let videoDuration = try await videoAsset.load(.duration)
         let transform = try await videoTrack.load(.preferredTransform)
         let orientation = getOrientation(from: transform)
@@ -42,7 +42,7 @@ final class VideoCompressor: ObservableObject {
             reader.add(videoOutput)
         }
         
-        // 2. SETUP AUDIO (Potong durasi audio agar SAMA DENGAN video)
+        // 2. SETUP AUDIO (Dipotong tepat pada durasi video)
         var audioAsset = videoAsset
         if let customMusic = musicURL {
             audioAsset = AVURLAsset(url: customMusic)
@@ -53,7 +53,6 @@ final class VideoCompressor: ObservableObject {
         
         if let audioTrack = try? await audioAsset.loadTracks(withMediaType: .audio).first {
             let aReader = try AVAssetReader(asset: audioAsset)
-            // KUNCI DURASI: Batasi pembacaan audio hanya sampai durasi video!
             aReader.timeRange = CMTimeRange(start: .zero, duration: videoDuration)
             
             let aOut = AVAssetReaderTrackOutput(
@@ -68,7 +67,7 @@ final class VideoCompressor: ObservableObject {
             }
         }
         
-        // 3. SETUP WRITER ANTI-BEGAL
+        // 3. SETUP WRITER ANTI-BEGAL (3.0 Mbps)
         let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
         writer.shouldOptimizeForNetworkUse = true
         
@@ -77,7 +76,7 @@ final class VideoCompressor: ObservableObject {
             AVVideoWidthKey: targetWidth,
             AVVideoHeightKey: targetHeight,
             AVVideoCompressionPropertiesKey: [
-                AVVideoAverageBitRateKey: 3_000_000, // 3.0 Mbps: Batas aman WA
+                AVVideoAverageBitRateKey: 3_000_000,
                 AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
                 AVVideoMaxKeyFrameIntervalKey: 60,
                 AVVideoExpectedSourceFrameRateKey: 60
@@ -121,7 +120,7 @@ final class VideoCompressor: ObservableObject {
             }
         }
         
-        // 4. MULAI RENDERING
+        // 4. MULAI RENDERING METAL
         reader.startReading()
         audioReader?.startReading()
         writer.startWriting()
@@ -166,9 +165,7 @@ final class VideoCompressor: ObservableObject {
                         return
                     }
                     
-                    // KUNCI ANTI-TERBALIK: Gunakan Apple CoreImage Orientation
                     var ciImage = CIImage(cvPixelBuffer: imageBuffer).oriented(orientation)
-                    
                     let extent = ciImage.extent
                     let scale = max(CGFloat(targetWidth) / extent.width, CGFloat(targetHeight) / extent.height)
                     
@@ -208,7 +205,6 @@ final class VideoCompressor: ObservableObject {
             }
         }
         
-        // AUDIO THREAD (Dibatasi ketat hingga durasi video)
         var isAudioDone = false
         var pendingAudioBuffer: CMSampleBuffer? = nil
         
@@ -232,7 +228,6 @@ final class VideoCompressor: ObservableObject {
                     }
                     
                     let pts = CMSampleBufferGetPresentationTimeStamp(buffer)
-                    // Hentikan audio jika sudah melewati durasi video
                     if pts >= videoDuration {
                         if !isAudioDone {
                             isAudioDone = true
@@ -272,13 +267,11 @@ final class VideoCompressor: ObservableObject {
     }
     
     private func getOrientation(from transform: CGAffineTransform) -> CGImagePropertyOrientation {
-        if transform.a == 0 && transform.b == 1.0 && transform.c == -1.0 && transform.d == 0 {
+        if transform.a == 0 && transform.b > 0 && transform.c < 0 {
             return .right
-        } else if transform.a == 0 && transform.b == -1.0 && transform.c == 1.0 && transform.d == 0 {
+        } else if transform.a == 0 && transform.b < 0 && transform.c > 0 {
             return .left
-        } else if transform.a == 1.0 && transform.b == 0 && transform.c == 0 && transform.d == 1.0 {
-            return .up
-        } else if transform.a == -1.0 && transform.b == 0 && transform.c == 0 && transform.d == -1.0 {
+        } else if transform.a < 0 && transform.d < 0 {
             return .down
         }
         return .up
