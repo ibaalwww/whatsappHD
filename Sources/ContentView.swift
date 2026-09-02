@@ -18,43 +18,45 @@ struct ContentView: View {
     
     var body: some View {
         ZStack {
-            Color(red: 0.05, green: 0.06, blue: 0.08).ignoresSafeArea()
+            Color(red: 0.04, green: 0.05, blue: 0.07).ignoresSafeArea()
             
-            VStack(spacing: 16) {
-                // Header Ringkas
-                VStack(spacing: 3) {
+            VStack(spacing: 20) {
+                // Header
+                VStack(spacing: 4) {
                     Text("STATUS PURIFIER")
-                        .font(.system(size: 13, weight: .bold, design: .monospaced))
-                        .tracking(2.5)
+                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                        .tracking(3)
                         .foregroundColor(.white)
-                    Text("1080P 60 FPS ANTI-BEGAL")
+                    Text("TRUE 1080P 60 FPS ENGINE")
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .foregroundColor(Color(red: 0.83, green: 0.68, blue: 0.21))
                 }
-                .padding(.top, 10)
+                .padding(.top, 24)
                 
-                // Box Status Utama
+                // Status Box
                 VStack(spacing: 12) {
                     if compressor.isProcessing {
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle(tint: Color(red: 0.83, green: 0.68, blue: 0.21)))
-                            .scaleEffect(1.3)
+                            .scaleEffect(1.4)
                         Text(compressor.statusMessage)
                             .font(.system(size: 11, design: .monospaced))
                             .foregroundColor(.gray)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
                     } else if processedVideoURL != nil {
                         Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 40))
+                            .font(.system(size: 42))
                             .foregroundColor(Color(red: 0.83, green: 0.68, blue: 0.21))
-                        Text("PROSES SELESAI")
+                        Text("RENDER 60 FPS SUKSES")
                             .font(.system(size: 12, weight: .bold, design: .monospaced))
                             .foregroundColor(.white)
-                        Text("1080x1920 • 60 FPS Murni")
+                        Text("1080x1920 • 60.0 FPS • 3.0 Mbps")
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundColor(.gray)
                     } else {
                         Image(systemName: "video.badge.waveform")
-                            .font(.system(size: 40))
+                            .font(.system(size: 42))
                             .foregroundColor(.gray)
                         Text(videoInfoText ?? "PILIH MASTER VIDEO 4K")
                             .font(.system(size: 11, design: .monospaced))
@@ -62,13 +64,13 @@ struct ContentView: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: 160)
-                .background(Color(red: 0.09, green: 0.10, blue: 0.12))
-                .cornerRadius(14)
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.06), lineWidth: 1))
+                .frame(height: 180)
+                .background(Color(red: 0.08, green: 0.09, blue: 0.11))
+                .cornerRadius(16)
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.08), lineWidth: 1))
                 .padding(.horizontal, 20)
                 
-                // Pilihan Musik Tambahan
+                // Panel Musik
                 HStack {
                     Image(systemName: "music.note")
                         .foregroundColor(selectedMusicURL != nil ? Color(red: 0.83, green: 0.68, blue: 0.21) : .gray)
@@ -83,7 +85,7 @@ struct ContentView: View {
                                 .foregroundColor(.gray)
                         }
                     } else {
-                        Text("Ganti Musik Latar (Opsional)")
+                        Text("Tambahkan Musik (Opsional)")
                             .font(.system(size: 11, design: .monospaced))
                             .foregroundColor(.gray)
                         Spacer()
@@ -94,21 +96,21 @@ struct ContentView: View {
                         .foregroundColor(Color(red: 0.83, green: 0.68, blue: 0.21))
                     }
                 }
-                .padding(.horizontal, 14)
-                .frame(height: 44)
-                .background(Color(red: 0.09, green: 0.10, blue: 0.12))
-                .cornerRadius(10)
+                .padding(.horizontal, 16)
+                .frame(height: 48)
+                .background(Color(red: 0.08, green: 0.09, blue: 0.11))
+                .cornerRadius(12)
                 .padding(.horizontal, 20)
                 
-                // Panduan Trik Status 60 FPS
+                // Panduan Trik Status WA
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("💡 CARA AGAR TIDAK DI-COMPRESS WA:")
+                    Text("💡 TIPS AGAR TIDAK DI-COMPRESS WA:")
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
                         .foregroundColor(Color(red: 0.83, green: 0.68, blue: 0.21))
-                    Text("1. Simpan ke Galeri.\n2. Buka WA, kirim ke chat sendiri (You) dengan tombol [HD].\n3. Teruskan (Forward) video tersebut ke 'Status Saya'.")
+                    Text("1. Simpan video ke Galeri.\n2. Kirim ke Chat Sendiri (You) dengan tombol [HD] aktif.\n3. Teruskan (Forward) ke Status Saya.")
                         .font(.system(size: 9, design: .monospaced))
                         .foregroundColor(.gray)
-                        .lineSpacing(2)
+                        .lineSpacing(3)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
@@ -118,20 +120,20 @@ struct ContentView: View {
                 
                 Spacer()
                 
-                // Tombol Aksi Bawah
-                VStack(spacing: 10) {
+                // Tombol Aksi
+                VStack(spacing: 12) {
                     if let outputURL = processedVideoURL {
-                        Button(action: { saveToPhotoLibrary(url: outputURL) }) {
+                        Button(action: { requestSaveToGallery(url: outputURL) }) {
                             HStack {
                                 Image(systemName: "square.and.arrow.down.fill")
-                                Text(saveMessage ?? "SIMPAN LANGSUNG KE GALERI")
+                                Text(saveMessage ?? "SIMPAN KE GALERI (60 FPS)")
                             }
                             .font(.system(size: 11, weight: .bold, design: .monospaced))
                             .foregroundColor(.black)
                             .frame(maxWidth: .infinity)
-                            .frame(height: 48)
+                            .frame(height: 50)
                             .background(Color(red: 0.83, green: 0.68, blue: 0.21))
-                            .cornerRadius(10)
+                            .cornerRadius(12)
                         }
                         
                         Button(action: { showShareSheet = true }) {
@@ -142,9 +144,9 @@ struct ContentView: View {
                             .font(.system(size: 11, weight: .bold, design: .monospaced))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
-                            .frame(height: 48)
+                            .frame(height: 50)
                             .background(Color(red: 0.13, green: 0.15, blue: 0.18))
-                            .cornerRadius(10)
+                            .cornerRadius(12)
                         }
                     }
                     
@@ -156,9 +158,9 @@ struct ContentView: View {
                         .font(.system(size: 11, weight: .bold, design: .monospaced))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 48)
-                        .background(Color(red: 0.18, green: 0.20, blue: 0.24))
-                        .cornerRadius(10)
+                        .frame(height: 50)
+                        .background(Color(red: 0.16, green: 0.18, blue: 0.22))
+                        .cornerRadius(12)
                     }
                     .disabled(compressor.isProcessing)
                 }
@@ -218,15 +220,23 @@ struct ContentView: View {
         }
     }
     
-    private func saveToPhotoLibrary(url: URL) {
-        PHPhotoLibrary.shared().performChanges({
-            PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
-        }) { success, error in
+    private func requestSaveToGallery(url: URL) {
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
             DispatchQueue.main.async {
-                if success {
-                    self.saveMessage = "BERHASIL DISIMPAN KE GALERI! ✓"
+                if status == .authorized || status == .limited {
+                    PHPhotoLibrary.shared().performChanges({
+                        PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
+                    }) { success, error in
+                        DispatchQueue.main.async {
+                            if success {
+                                self.saveMessage = "BERHASIL DISIMPAN KE GALERI! ✓"
+                            } else {
+                                self.saveMessage = "GAGAL SIMPAN: \(error?.localizedDescription ?? "")"
+                            }
+                        }
+                    }
                 } else {
-                    self.saveMessage = "GAGAL MENYIMPAN: \(error?.localizedDescription ?? "")"
+                    self.saveMessage = "IZIN GALERI DITOLAK!"
                 }
             }
         }
