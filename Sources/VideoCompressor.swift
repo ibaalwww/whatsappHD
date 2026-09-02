@@ -11,7 +11,7 @@ final class VideoCompressor: ObservableObject {
     func compressVideo(inputURL: URL, musicURL: URL? = nil) async throws -> URL {
         await MainActor.run {
             self.isProcessing = true
-            self.statusMessage = "Menganalisis durasi & rotasi..."
+            self.statusMessage = "Menganalisis frame 60 FPS..."
         }
         
         let videoAsset = AVURLAsset(url: inputURL)
@@ -42,7 +42,7 @@ final class VideoCompressor: ObservableObject {
             reader.add(videoOutput)
         }
         
-        // 2. SETUP AUDIO (Dipotong tepat pada durasi video)
+        // 2. SETUP AUDIO (Dipotong tepat sesuai durasi video asli)
         var audioAsset = videoAsset
         if let customMusic = musicURL {
             audioAsset = AVURLAsset(url: customMusic)
@@ -67,7 +67,7 @@ final class VideoCompressor: ObservableObject {
             }
         }
         
-        // 3. SETUP WRITER ANTI-BEGAL (3.0 Mbps)
+        // 3. SETUP WRITER (Kunci 3.0 Mbps & 60 FPS murni)
         let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
         writer.shouldOptimizeForNetworkUse = true
         
@@ -120,14 +120,14 @@ final class VideoCompressor: ObservableObject {
             }
         }
         
-        // 4. MULAI RENDERING METAL
+        // 4. EKSEKUSI RENDER METAL
         reader.startReading()
         audioReader?.startReading()
         writer.startWriting()
         writer.startSession(atSourceTime: .zero)
         
         await MainActor.run {
-            self.statusMessage = "Merender 1080p 60 FPS..."
+            self.statusMessage = "Merender frame 60 FPS murni..."
         }
         
         let ciContext = CIContext(options: [.useSoftwareRenderer: false])
@@ -137,6 +137,7 @@ final class VideoCompressor: ObservableObject {
         
         var isVideoDone = false
         var pendingVideoBuffer: CMSampleBuffer? = nil
+        var frameIndex: Int64 = 0
         
         group.enter()
         videoInput.requestMediaDataWhenReady(on: videoQueue) {
@@ -156,7 +157,8 @@ final class VideoCompressor: ObservableObject {
                     break
                 }
                 
-                let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+                // KUNCI 60 FPS STABIL: Paksa interval presisi 16.6ms per frame
+                let forcedPTS = CMTime(value: frameIndex * 1000, timescale: 60000)
                 var appendSuccess = false
                 
                 autoreleasepool {
@@ -193,12 +195,13 @@ final class VideoCompressor: ObservableObject {
                     
                     if let destBuffer = pixelBufferOut {
                         ciContext.render(ciImage, to: destBuffer)
-                        appendSuccess = adaptor.append(destBuffer, withPresentationTime: pts)
+                        appendSuccess = adaptor.append(destBuffer, withPresentationTime: forcedPTS)
                     }
                 }
                 
                 if appendSuccess {
                     pendingVideoBuffer = nil
+                    frameIndex += 1
                 } else {
                     break
                 }
