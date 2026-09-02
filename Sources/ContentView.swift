@@ -12,179 +12,212 @@ struct ContentView: View {
     @State private var selectedMusicURL: URL? = nil
     @State private var processedVideoURL: URL? = nil
     @State private var showShareSheet = false
-    @State private var videoInfoText: String? = nil
-    @State private var saveStatusAlert = false
-    @State private var saveStatusMessage = ""
+    @State private var videoDetails: String? = nil
+    @State private var alertMessage: String? = nil
+    @State private var showAlert = false
     
     var body: some View {
-        ZStack {
-            Color(red: 0.05, green: 0.06, blue: 0.08).ignoresSafeArea()
-            
-            VStack(spacing: 14) {
-                // Header Bar
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("PURESTATUS 60 FPS")
-                            .font(.system(size: 15, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white)
-                        Text("ANTI-COMPRESSION BYPASS ENGINE")
-                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                            .foregroundColor(Color(red: 0.83, green: 0.68, blue: 0.21))
-                    }
-                    Spacer()
-                    Image(systemName: "bolt.badge.checkmark.fill")
-                        .foregroundColor(Color(red: 0.83, green: 0.68, blue: 0.21))
-                        .font(.system(size: 20))
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 16)
+        GeometryReader { geo in
+            ZStack {
+                // Background hitam pekat AMOLED
+                Color.black.ignoresSafeArea()
                 
-                // Box Pratinjau & Status
-                VStack(spacing: 12) {
-                    if compressor.isProcessing {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: Color(red: 0.83, green: 0.68, blue: 0.21)))
-                            .scaleEffect(1.3)
-                        
-                        Text(compressor.statusMessage)
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(.white)
-                        
-                        // Progress Bar Dinamis
-                        ProgressView(value: compressor.progress, total: 1.0)
-                            .progressViewStyle(LinearProgressViewStyle(tint: Color(red: 0.83, green: 0.68, blue: 0.21)))
-                            .frame(height: 6)
-                            .padding(.horizontal, 30)
-                        
-                        Text("\(Int(compressor.progress * 100))%")
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .foregroundColor(.gray)
-                    } else if processedVideoURL != nil {
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 44))
-                            .foregroundColor(Color(red: 0.83, green: 0.68, blue: 0.21))
-                        Text("READY UNTUK STATUS WA")
-                            .font(.system(size: 13, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white)
-                        Text("1080x1920 • 60 FPS Murni • H.264 Level 4.1")
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(.gray)
-                    } else {
-                        Image(systemName: "video.badge.waveform")
-                            .font(.system(size: 40))
-                            .foregroundColor(.gray.opacity(0.8))
-                        Text(videoInfoText ?? "PILIH MASTER VIDEO 4K")
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(.gray)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 180)
-                .background(Color(red: 0.09, green: 0.10, blue: 0.13))
-                .cornerRadius(14)
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.08), lineWidth: 1))
-                .padding(.horizontal, 20)
-                
-                // Pilihan Musik
-                HStack {
-                    Image(systemName: "music.note")
-                        .foregroundColor(selectedMusicURL != nil ? Color(red: 0.83, green: 0.68, blue: 0.21) : .gray)
-                    if let music = selectedMusicURL {
-                        Text(music.lastPathComponent)
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(.white)
-                            .lineLimit(1)
+                VStack(spacing: 0) {
+                    // 1. TOP BAR
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("STATUS PURIFIER")
+                                .font(.system(size: 16, weight: .black, design: .rounded))
+                                .foregroundColor(.white)
+                            Text("60 FPS ULTRA COMPRESSOR")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundColor(Color(red: 0.18, green: 0.80, blue: 0.44)) // WhatsApp Green
+                        }
                         Spacer()
-                        Button(action: { selectedMusicURL = nil }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.gray)
-                        }
-                    } else {
-                        Text("Tambahkan Musik Latar (Opsional)")
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(.gray)
-                        Spacer()
-                        Button("Pilih File") {
-                            showMusicPicker = true
-                        }
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundColor(Color(red: 0.83, green: 0.68, blue: 0.21))
-                    }
-                }
-                .padding(.horizontal, 14)
-                .frame(height: 44)
-                .background(Color(red: 0.09, green: 0.10, blue: 0.13))
-                .cornerRadius(10)
-                .padding(.horizontal, 20)
-                
-                // Panduan Trik PureStatus
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("💡 RAHASIA STATUS 60 FPS MULUS:")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .foregroundColor(Color(red: 0.83, green: 0.68, blue: 0.21))
-                    Text("1. Simpan video ke Galeri.\n2. Buka WA, kirim ke chat sendiri (You) dengan tombol [HD].\n3. Tahan video di chat > Teruskan (Forward) ke Status Saya.")
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(.gray)
-                        .lineSpacing(2)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
-                .background(Color.white.opacity(0.03))
-                .cornerRadius(10)
-                .padding(.horizontal, 20)
-                
-                Spacer()
-                
-                // Tombol Aksi Bawah
-                VStack(spacing: 10) {
-                    if let outputURL = processedVideoURL {
-                        Button(action: { saveVideoSafely(url: outputURL) }) {
-                            HStack {
-                                Image(systemName: "square.and.arrow.down.fill")
-                                Text("SIMPAN KE GALERI (FOTO)")
-                            }
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .foregroundColor(.black)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 48)
-                            .background(Color(red: 0.83, green: 0.68, blue: 0.21))
-                            .cornerRadius(10)
-                        }
                         
-                        Button(action: { showShareSheet = true }) {
-                            HStack {
-                                Image(systemName: "paperplane.fill")
-                                Text("BAGIKAN LANGSUNG")
-                            }
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 48)
-                            .background(Color(red: 0.13, green: 0.15, blue: 0.18))
-                            .cornerRadius(10)
+                        // Badge HD
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(processedVideoURL != nil ? Color.green : Color.gray)
+                                .frame(width: 7, height: 7)
+                            Text("HD 60")
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
                         }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.white.opacity(0.1))
+                        .cornerRadius(20)
                     }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 16)
                     
-                    Button(action: { showVideoPicker = true }) {
-                        HStack {
-                            Image(systemName: "photo.on.rectangle.angled")
-                            Text(selectedVideoURL == nil ? "IMPORT VIDEO MASTER 4K" : "GANTI VIDEO")
+                    Spacer()
+                    
+                    // 2. MAIN PREVIEW CARD (CENTER)
+                    VStack(spacing: 16) {
+                        if compressor.isProcessing {
+                            // Tampilan Processing
+                            VStack(spacing: 14) {
+                                ZStack {
+                                    Circle()
+                                        .stroke(Color.white.opacity(0.1), lineWidth: 6)
+                                        .frame(width: 80, height: 80)
+                                    Circle()
+                                        .trim(from: 0, to: compressor.progress)
+                                        .stroke(Color(red: 0.18, green: 0.80, blue: 0.44), style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                                        .frame(width: 80, height: 80)
+                                        .rotationEffect(.degrees(-90))
+                                        .animation(.linear, value: compressor.progress)
+                                    
+                                    Text("\(Int(compressor.progress * 100))%")
+                                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                                        .foregroundColor(.white)
+                                }
+                                
+                                Text(compressor.statusMessage)
+                                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                    .foregroundColor(.gray)
+                            }
+                        } else if processedVideoURL != nil {
+                            // Tampilan Video Sukses Siap Kirim
+                            VStack(spacing: 12) {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .font(.system(size: 54))
+                                    .foregroundColor(Color(red: 0.18, green: 0.80, blue: 0.44))
+                                
+                                Text("VIDEO SIAP DIPASANG")
+                                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                                    .foregroundColor(.white)
+                                
+                                Text("1080x1920 • 60 FPS • High Profile 4.1")
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundColor(.gray)
+                            }
+                        } else {
+                            // Tampilan Idle (Belum pilih video)
+                            Button(action: { showVideoPicker = true }) {
+                                VStack(spacing: 12) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.white.opacity(0.06))
+                                            .frame(width: 74, height: 74)
+                                        Image(systemName: "video.badge.plus")
+                                            .font(.system(size: 32))
+                                            .foregroundColor(.white)
+                                    }
+                                    
+                                    Text("PILIH VIDEO MASTER 4K")
+                                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                        .foregroundColor(.white)
+                                    
+                                    Text(videoDetails ?? "Mendukung 4K 60 FPS Camera")
+                                        .font(.system(size: 10, design: .monospaced))
+                                        .foregroundColor(.gray)
+                                }
+                            }
                         }
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 48)
-                        .background(Color(red: 0.18, green: 0.20, blue: 0.24))
-                        .cornerRadius(10)
                     }
-                    .disabled(compressor.isProcessing)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: geo.size.height * 0.38)
+                    .background(Color(red: 0.09, green: 0.10, blue: 0.12))
+                    .cornerRadius(20)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
+                    .padding(.horizontal, 20)
+                    
+                    // 3. OPTIONAL MUSIC BAR
+                    HStack {
+                        Image(systemName: "music.note")
+                            .foregroundColor(selectedMusicURL != nil ? Color.green : .gray)
+                        
+                        if let music = selectedMusicURL {
+                            Text(music.lastPathComponent)
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(.white)
+                                .lineLimit(1)
+                            Spacer()
+                            Button(action: { selectedMusicURL = nil }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.gray)
+                            }
+                        } else {
+                            Text("Ganti Musik Latar (Opsional)")
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundColor(.gray)
+                            Spacer()
+                            Button("Pilih") {
+                                showMusicPicker = true
+                            }
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color(red: 0.18, green: 0.80, blue: 0.44))
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(height: 48)
+                    .background(Color(red: 0.09, green: 0.10, blue: 0.12))
+                    .cornerRadius(12)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 14)
+                    
+                    Spacer()
+                    
+                    // 4. ACTION BUTTONS (BOTTOM)
+                    VStack(spacing: 10) {
+                        if let outputURL = processedVideoURL {
+                            // Tombol Simpan ke Galeri (Native Anti-Crash)
+                            Button(action: { saveVideoSafely(url: outputURL) }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "square.and.arrow.down.fill")
+                                    Text("SIMPAN KE GALERI FOTO")
+                                }
+                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .foregroundColor(.black)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 52)
+                                .background(Color(red: 0.18, green: 0.80, blue: 0.44))
+                                .cornerRadius(14)
+                            }
+                            
+                            // Tombol Share Sheet Langsung
+                            Button(action: { showShareSheet = true }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "paperplane.fill")
+                                    Text("BAGIKAN KE CHAT / STATUS")
+                                }
+                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 52)
+                                .background(Color.white.opacity(0.12))
+                                .cornerRadius(14)
+                            }
+                        }
+                        
+                        // Tombol Ganti / Pilih Video
+                        Button(action: { showVideoPicker = true }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "photo.on.rectangle")
+                                Text(processedVideoURL == nil ? "IMPORT DARI GALERI" : "PILIH VIDEO LAIN")
+                            }
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 52)
+                            .background(Color(red: 0.14, green: 0.16, blue: 0.20))
+                            .cornerRadius(14)
+                        }
+                        .disabled(compressor.isProcessing)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, geo.safeAreaInsets.bottom > 0 ? geo.safeAreaInsets.bottom : 20)
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 24)
             }
         }
-        .alert(isPresented: $saveStatusAlert) {
-            Alert(title: Text("Galeri"), message: Text(saveStatusMessage), dismissButton: .default(Text("OK")))
+        .alert(isPresented: $showAlert) {
+            Alert(title: Text("Info"), message: Text(alertMessage ?? ""), dismissButton: .default(Text("OK")))
         }
         .sheet(isPresented: $showVideoPicker) {
             NativeVideoPicker { url in
@@ -195,10 +228,10 @@ struct ContentView: View {
                        let size = try? await track.load(.naturalSize),
                        let fps = try? await track.load(.nominalFrameRate) {
                         await MainActor.run {
-                            self.videoInfoText = "\(Int(size.width))x\(Int(size.height)) • \(Int(round(fps))) FPS"
+                            self.videoDetails = "\(Int(size.width))x\(Int(size.height)) @ \(Int(round(fps))) FPS"
                         }
                     }
-                    startProcessing()
+                    startCompression()
                 }
             }
         }
@@ -206,7 +239,7 @@ struct ContentView: View {
             AudioPicker { url in
                 selectedMusicURL = url
                 if selectedVideoURL != nil {
-                    startProcessing()
+                    startCompression()
                 }
             }
         }
@@ -217,41 +250,38 @@ struct ContentView: View {
         }
     }
     
-    private func startProcessing() {
-        guard let videoURL = selectedVideoURL else { return }
+    private func startCompression() {
+        guard let url = selectedVideoURL else { return }
         Task {
             do {
-                let result = try await compressor.compressVideo(
-                    inputURL: videoURL,
-                    musicURL: selectedMusicURL
-                )
+                let result = try await compressor.compressVideo(inputURL: url, musicURL: selectedMusicURL)
                 await MainActor.run {
                     self.processedVideoURL = result
                 }
             } catch {
                 await MainActor.run {
-                    self.compressor.statusMessage = "Gagal: \(error.localizedDescription)"
+                    self.alertMessage = "Gagal memproses: \(error.localizedDescription)"
+                    self.showAlert = true
                 }
             }
         }
     }
     
-    // Simpan native anti-crash (kebal crash SIGABRT)
     private func saveVideoSafely(url: URL) {
         let saver = VideoSaver()
         saver.onSuccess = {
-            self.saveStatusMessage = "Berhasil disimpan ke Galeri! ✓ (Tersimpan murni 60 FPS)"
-            self.saveStatusAlert = true
+            self.alertMessage = "Video 60 FPS berhasil disimpan ke Galeri! ✓"
+            self.showAlert = true
         }
         saver.onError = { error in
-            self.saveStatusMessage = "Gagal simpan: \(error.localizedDescription)"
-            self.saveStatusAlert = true
+            self.alertMessage = "Gagal simpan: \(error.localizedDescription)"
+            self.showAlert = true
         }
         saver.save(url: url)
     }
 }
 
-// Helper penyimpanan UIKit
+// UIKit Safe Video Saver (Anti Crash)
 class VideoSaver: NSObject {
     var onSuccess: (() -> Void)?
     var onError: ((Error) -> Void)?
@@ -271,6 +301,7 @@ class VideoSaver: NSObject {
     }
 }
 
+// Native Video Picker (Force Raw Original)
 struct NativeVideoPicker: UIViewControllerRepresentable {
     var onVideoPicked: (URL) -> Void
     @Environment(\.presentationMode) private var presentationMode
