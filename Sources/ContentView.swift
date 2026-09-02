@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import Photos
 import PhotosUI
 import UniformTypeIdentifiers
 
@@ -14,50 +13,66 @@ struct ContentView: View {
     @State private var processedVideoURL: URL? = nil
     @State private var showShareSheet = false
     @State private var videoInfoText: String? = nil
-    @State private var saveMessage: String? = nil
+    @State private var saveStatusAlert = false
+    @State private var saveStatusMessage = ""
     
     var body: some View {
         ZStack {
-            Color(red: 0.04, green: 0.05, blue: 0.07).ignoresSafeArea()
+            Color(red: 0.05, green: 0.06, blue: 0.08).ignoresSafeArea()
             
-            VStack(spacing: 20) {
-                // Header
-                VStack(spacing: 4) {
-                    Text("STATUS PURIFIER")
-                        .font(.system(size: 14, weight: .bold, design: .monospaced))
-                        .tracking(3)
-                        .foregroundColor(.white)
-                    Text("TRUE 1080P 60 FPS ENGINE")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            VStack(spacing: 14) {
+                // Header Bar
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("PURESTATUS 60 FPS")
+                            .font(.system(size: 15, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
+                        Text("ANTI-COMPRESSION BYPASS ENGINE")
+                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .foregroundColor(Color(red: 0.83, green: 0.68, blue: 0.21))
+                    }
+                    Spacer()
+                    Image(systemName: "bolt.badge.checkmark.fill")
                         .foregroundColor(Color(red: 0.83, green: 0.68, blue: 0.21))
+                        .font(.system(size: 20))
                 }
-                .padding(.top, 24)
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
                 
-                // Status Box
+                // Box Pratinjau & Status
                 VStack(spacing: 12) {
                     if compressor.isProcessing {
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle(tint: Color(red: 0.83, green: 0.68, blue: 0.21)))
-                            .scaleEffect(1.4)
+                            .scaleEffect(1.3)
+                        
                         Text(compressor.statusMessage)
-                            .font(.system(size: 11, design: .monospaced))
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(.white)
+                        
+                        // Progress Bar Dinamis
+                        ProgressView(value: compressor.progress, total: 1.0)
+                            .progressViewStyle(LinearProgressViewStyle(tint: Color(red: 0.83, green: 0.68, blue: 0.21)))
+                            .frame(height: 6)
+                            .padding(.horizontal, 30)
+                        
+                        Text("\(Int(compressor.progress * 100))%")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
                             .foregroundColor(.gray)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
                     } else if processedVideoURL != nil {
                         Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 42))
+                            .font(.system(size: 44))
                             .foregroundColor(Color(red: 0.83, green: 0.68, blue: 0.21))
-                        Text("RENDER 60 FPS SUKSES")
-                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        Text("READY UNTUK STATUS WA")
+                            .font(.system(size: 13, weight: .bold, design: .monospaced))
                             .foregroundColor(.white)
-                        Text("1080x1920 • 60.0 FPS • 3.0 Mbps")
+                        Text("1080x1920 • 60 FPS Murni • H.264 Level 4.1")
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundColor(.gray)
                     } else {
                         Image(systemName: "video.badge.waveform")
-                            .font(.system(size: 42))
-                            .foregroundColor(.gray)
+                            .font(.system(size: 40))
+                            .foregroundColor(.gray.opacity(0.8))
                         Text(videoInfoText ?? "PILIH MASTER VIDEO 4K")
                             .font(.system(size: 11, design: .monospaced))
                             .foregroundColor(.gray)
@@ -65,12 +80,12 @@ struct ContentView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 180)
-                .background(Color(red: 0.08, green: 0.09, blue: 0.11))
-                .cornerRadius(16)
-                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.08), lineWidth: 1))
+                .background(Color(red: 0.09, green: 0.10, blue: 0.13))
+                .cornerRadius(14)
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.08), lineWidth: 1))
                 .padding(.horizontal, 20)
                 
-                // Panel Musik
+                // Pilihan Musik
                 HStack {
                     Image(systemName: "music.note")
                         .foregroundColor(selectedMusicURL != nil ? Color(red: 0.83, green: 0.68, blue: 0.21) : .gray)
@@ -85,32 +100,32 @@ struct ContentView: View {
                                 .foregroundColor(.gray)
                         }
                     } else {
-                        Text("Tambahkan Musik (Opsional)")
+                        Text("Tambahkan Musik Latar (Opsional)")
                             .font(.system(size: 11, design: .monospaced))
                             .foregroundColor(.gray)
                         Spacer()
-                        Button("Pilih") {
+                        Button("Pilih File") {
                             showMusicPicker = true
                         }
                         .font(.system(size: 11, weight: .bold, design: .monospaced))
                         .foregroundColor(Color(red: 0.83, green: 0.68, blue: 0.21))
                     }
                 }
-                .padding(.horizontal, 16)
-                .frame(height: 48)
-                .background(Color(red: 0.08, green: 0.09, blue: 0.11))
-                .cornerRadius(12)
+                .padding(.horizontal, 14)
+                .frame(height: 44)
+                .background(Color(red: 0.09, green: 0.10, blue: 0.13))
+                .cornerRadius(10)
                 .padding(.horizontal, 20)
                 
-                // Panduan Trik Status WA
+                // Panduan Trik PureStatus
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("💡 TIPS AGAR TIDAK DI-COMPRESS WA:")
+                    Text("💡 RAHASIA STATUS 60 FPS MULUS:")
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
                         .foregroundColor(Color(red: 0.83, green: 0.68, blue: 0.21))
-                    Text("1. Simpan video ke Galeri.\n2. Kirim ke Chat Sendiri (You) dengan tombol [HD] aktif.\n3. Teruskan (Forward) ke Status Saya.")
+                    Text("1. Simpan video ke Galeri.\n2. Buka WA, kirim ke chat sendiri (You) dengan tombol [HD].\n3. Tahan video di chat > Teruskan (Forward) ke Status Saya.")
                         .font(.system(size: 9, design: .monospaced))
                         .foregroundColor(.gray)
-                        .lineSpacing(3)
+                        .lineSpacing(2)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
@@ -120,47 +135,47 @@ struct ContentView: View {
                 
                 Spacer()
                 
-                // Tombol Aksi
-                VStack(spacing: 12) {
+                // Tombol Aksi Bawah
+                VStack(spacing: 10) {
                     if let outputURL = processedVideoURL {
-                        Button(action: { requestSaveToGallery(url: outputURL) }) {
+                        Button(action: { saveVideoSafely(url: outputURL) }) {
                             HStack {
                                 Image(systemName: "square.and.arrow.down.fill")
-                                Text(saveMessage ?? "SIMPAN KE GALERI (60 FPS)")
+                                Text("SIMPAN KE GALERI (FOTO)")
                             }
                             .font(.system(size: 11, weight: .bold, design: .monospaced))
                             .foregroundColor(.black)
                             .frame(maxWidth: .infinity)
-                            .frame(height: 50)
+                            .frame(height: 48)
                             .background(Color(red: 0.83, green: 0.68, blue: 0.21))
-                            .cornerRadius(12)
+                            .cornerRadius(10)
                         }
                         
                         Button(action: { showShareSheet = true }) {
                             HStack {
                                 Image(systemName: "paperplane.fill")
-                                Text("BAGIKAN VIA SHARE SHEET")
+                                Text("BAGIKAN LANGSUNG")
                             }
                             .font(.system(size: 11, weight: .bold, design: .monospaced))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
-                            .frame(height: 50)
+                            .frame(height: 48)
                             .background(Color(red: 0.13, green: 0.15, blue: 0.18))
-                            .cornerRadius(12)
+                            .cornerRadius(10)
                         }
                     }
                     
                     Button(action: { showVideoPicker = true }) {
                         HStack {
                             Image(systemName: "photo.on.rectangle.angled")
-                            Text(selectedVideoURL == nil ? "IMPORT VIDEO 4K" : "GANTI VIDEO MASTER")
+                            Text(selectedVideoURL == nil ? "IMPORT VIDEO MASTER 4K" : "GANTI VIDEO")
                         }
                         .font(.system(size: 11, weight: .bold, design: .monospaced))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .background(Color(red: 0.16, green: 0.18, blue: 0.22))
-                        .cornerRadius(12)
+                        .frame(height: 48)
+                        .background(Color(red: 0.18, green: 0.20, blue: 0.24))
+                        .cornerRadius(10)
                     }
                     .disabled(compressor.isProcessing)
                 }
@@ -168,10 +183,12 @@ struct ContentView: View {
                 .padding(.bottom, 24)
             }
         }
+        .alert(isPresented: $saveStatusAlert) {
+            Alert(title: Text("Galeri"), message: Text(saveStatusMessage), dismissButton: .default(Text("OK")))
+        }
         .sheet(isPresented: $showVideoPicker) {
             NativeVideoPicker { url in
                 selectedVideoURL = url
-                saveMessage = nil
                 Task {
                     let asset = AVURLAsset(url: url)
                     if let track = try? await asset.loadTracks(withMediaType: .video).first,
@@ -188,7 +205,6 @@ struct ContentView: View {
         .sheet(isPresented: $showMusicPicker) {
             AudioPicker { url in
                 selectedMusicURL = url
-                saveMessage = nil
                 if selectedVideoURL != nil {
                     startProcessing()
                 }
@@ -220,24 +236,36 @@ struct ContentView: View {
         }
     }
     
-    private func requestSaveToGallery(url: URL) {
-        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
-            DispatchQueue.main.async {
-                if status == .authorized || status == .limited {
-                    PHPhotoLibrary.shared().performChanges({
-                        PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
-                    }) { success, error in
-                        DispatchQueue.main.async {
-                            if success {
-                                self.saveMessage = "BERHASIL DISIMPAN KE GALERI! ✓"
-                            } else {
-                                self.saveMessage = "GAGAL SIMPAN: \(error?.localizedDescription ?? "")"
-                            }
-                        }
-                    }
-                } else {
-                    self.saveMessage = "IZIN GALERI DITOLAK!"
-                }
+    // Simpan native anti-crash (kebal crash SIGABRT)
+    private func saveVideoSafely(url: URL) {
+        let saver = VideoSaver()
+        saver.onSuccess = {
+            self.saveStatusMessage = "Berhasil disimpan ke Galeri! ✓ (Tersimpan murni 60 FPS)"
+            self.saveStatusAlert = true
+        }
+        saver.onError = { error in
+            self.saveStatusMessage = "Gagal simpan: \(error.localizedDescription)"
+            self.saveStatusAlert = true
+        }
+        saver.save(url: url)
+    }
+}
+
+// Helper penyimpanan UIKit
+class VideoSaver: NSObject {
+    var onSuccess: (() -> Void)?
+    var onError: ((Error) -> Void)?
+
+    func save(url: URL) {
+        UISaveVideoAtPathToSavedPhotosAlbum(url.path, self, #selector(video(_:didFinishSavingWithError:contextInfo:)), nil)
+    }
+
+    @objc func video(_ videoPath: String, didFinishSavingWithError error: Error?, contextInfo: UnsafeRawPointer) {
+        DispatchQueue.main.async {
+            if let err = error {
+                self.onError?(err)
+            } else {
+                self.onSuccess?()
             }
         }
     }
