@@ -9,7 +9,7 @@ final class VideoCompressor: ObservableObject {
     func compressVideo(inputURL: URL) async throws -> URL {
         await MainActor.run {
             self.isProcessing = true
-            self.statusMessage = "Membaca stream 60 FPS asli..."
+            self.statusMessage = "Menganalisis stream video murni..."
         }
         
         let asset = AVURLAsset(url: inputURL)
@@ -28,14 +28,12 @@ final class VideoCompressor: ObservableObject {
             .appendingPathComponent("WA_HD_60FPS_\(UUID().uuidString).mp4")
         try? FileManager.default.removeItem(at: outputURL)
         
-        // 1. Setup Reader dengan Frame Timing Lock
+        // 1. Setup Reader dengan Clock 60 Hz Mandiri
         let reader = try AVAssetReader(asset: asset)
         
         let videoComposition = AVMutableVideoComposition()
         videoComposition.renderSize = CGSize(width: targetWidth, height: targetHeight)
         videoComposition.frameDuration = CMTime(value: 1, timescale: 60)
-        // KUNCI UTAMA: Paksa compositor sinkron ke 60 FPS track sumber
-        videoComposition.sourceTrackIDForFrameTiming = videoTrack.trackID
         
         let instruction = AVMutableVideoCompositionInstruction()
         let duration = try await asset.load(.duration)
@@ -89,7 +87,7 @@ final class VideoCompressor: ObservableObject {
             }
         }
         
-        // 2. Setup Writer dengan Media TimeScale 600
+        // 2. Setup Writer dengan Konfigurasi Level H.264 Tinggi (High 5.1)
         let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
         writer.shouldOptimizeForNetworkUse = true
         
@@ -107,8 +105,7 @@ final class VideoCompressor: ObservableObject {
         
         let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
         videoInput.expectsMediaDataInRealTime = false
-        // KUNCI METADATA: Standar industri Apple untuk presisi 60 FPS
-        videoInput.mediaTimeScale = 600
+        videoInput.mediaTimeScale = 60000
         
         if writer.canAdd(videoInput) {
             writer.add(videoInput)
@@ -135,7 +132,7 @@ final class VideoCompressor: ObservableObject {
         writer.startSession(atSourceTime: .zero)
         
         await MainActor.run {
-            self.statusMessage = "Mengompresi ke 1080p 60 FPS Anti-Begal..."
+            self.statusMessage = "Mengunci 60 frame per detik..."
         }
         
         let videoQueue = DispatchQueue(label: "videoCompressQueue")
@@ -143,12 +140,34 @@ final class VideoCompressor: ObservableObject {
         let group = DispatchGroup()
         
         var isVideoDone = false
+        var frameIndex: Int64 = 0
+        
         group.enter()
         videoInput.requestMediaDataWhenReady(on: videoQueue) {
             if isVideoDone { return }
             while videoInput.isReadyForMoreMediaData {
                 if let buffer = videoOutput.copyNextSampleBuffer() {
-                    videoInput.append(buffer)
+                    // Paksa setiap frame memiliki durasi tepat 1/60 detik
+                    var timingInfo = CMSampleTimingInfo(
+                        duration: CMTime(value: 1000, timescale: 60000),
+                        presentationTimeStamp: CMTime(value: frameIndex * 1000, timescale: 60000),
+                        decodeTimeStamp: .invalid
+                    )
+                    var retimedBuffer: CMSampleBuffer?
+                    CMSampleBufferCreateCopyWithNewTiming(
+                        allocator: kCFAllocatorDefault,
+                        sampleBuffer: buffer,
+                        numSampleTimingEntries: 1,
+                        sampleTimingArray: &timingInfo,
+                        sampleBufferOut: &retimedBuffer
+                    )
+                    
+                    if let validBuffer = retimedBuffer {
+                        videoInput.append(validBuffer)
+                    } else {
+                        videoInput.append(buffer)
+                    }
+                    frameIndex += 1
                 } else {
                     if !isVideoDone {
                         isVideoDone = true
@@ -195,7 +214,7 @@ final class VideoCompressor: ObservableObject {
         if writer.status == .completed {
             return outputURL
         } else {
-            throw writer.error ?? NSError(domain: "Compressor", code: -2, userInfo: [NSLocalizedDescriptionKey: "Gagal encoding video 60 FPS."])
+            throw writer.error ?? NSError(domain: "Compressor", code: -2, userInfo: [NSLocalizedDescriptionKey: "Gagal encoding 60 FPS."])
         }
     }
 }
